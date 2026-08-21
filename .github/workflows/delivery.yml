@@ -78,6 +78,7 @@ jobs:
       - name: Run source and static policy gates
         working-directory: balcony-log
         run: |
+          npm run test:zero-trust
           npm run lint:ui
           npm run lint:watch-static
 
@@ -201,7 +202,7 @@ jobs:
 
   promote:
     needs: [build, staging]
-    uses: dalexsy/balcony-deploy-control/.github/workflows/promote.yml@24510ffa62f2d6c6741da79c11397073a675dafb
+    uses: dalexsy/balcony-deploy-control/.github/workflows/promote.yml@24510ffb69916e738a577ed49596e2b7084d2923
     with:
       artifact-name: ${{ needs.build.outputs.artifact-name }}
       artifact-file: ${{ needs.build.outputs.artifact-file }}
