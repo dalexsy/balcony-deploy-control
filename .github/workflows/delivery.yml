@@ -1,0 +1,210 @@
+name: unattended-balcony-delivery
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  attestations: write
+  contents: read
+  id-token: write
+
+concurrency:
+  group: balcony-zero-trust-delivery
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      artifact-name: ${{ steps.meta.outputs.artifact_name }}
+      artifact-file: ${{ steps.meta.outputs.artifact_file }}
+      artifact-digest: ${{ steps.meta.outputs.artifact_digest }}
+      commit-sha: ${{ steps.meta.outputs.commit_sha }}
+    steps:
+      - name: Checkout balcony source read-only
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: dalexsy/balcony-log
+          ref: main
+          path: balcony-log
+          ssh-key: ${{ secrets.BALCONY_LOG_READ_KEY }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Checkout directory source read-only
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: dalexsy/directory
+          ref: main
+          path: directory
+          ssh-key: ${{ secrets.DIRECTORY_READ_KEY }}
+          persist-credentials: false
+
+      - name: Checkout dryl packages read-only
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: dalexsy/dryl
+          ref: main
+          path: dryl
+          ssh-key: ${{ secrets.DRYL_READ_KEY }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: balcony-log/package-lock.json
+
+      - name: Build exact @dryl packages
+        working-directory: dryl
+        run: |
+          set -euo pipefail
+          for pkg in auth-client app-data storage; do
+            (cd "$pkg" && npm ci --ignore-scripts --legacy-peer-deps --include=dev && ./node_modules/.bin/tsc -p tsconfig.json)
+          done
+          (cd ui && npm ci --ignore-scripts --legacy-peer-deps && npm run build:lib)
+
+      - name: Install balcony dependencies without lifecycle scripts
+        working-directory: balcony-log
+        run: npm install --ignore-scripts --legacy-peer-deps --include=dev --no-audit --no-fund
+
+      - name: Fail-closed dependency audit
+        working-directory: balcony-log
+        run: npm audit --audit-level=high
+
+      - name: Run source and static policy gates
+        working-directory: balcony-log
+        run: |
+          npm run lint:ui
+          npm run lint:watch-static
+
+      - name: Build once
+        working-directory: balcony-log
+        run: |
+          npm run build:watch-css
+          BALCONY_SKIP_WATCH_CSS=1 npm run build
+          npm run verify:dist
+
+      - name: Package content-addressed artifact
+        id: meta
+        run: |
+          set -euo pipefail
+          sha="$(git -C balcony-log rev-parse HEAD)"
+          file="balcony-${sha}.tar.gz"
+          node_version="$(node --version)"
+          npm_version="$(npm --version)"
+          printf '{"schemaVersion":1,"commitSha":"%s","node":"%s","npm":"%s"}\n' \
+            "$sha" "$node_version" "$npm_version" > balcony-log/build-manifest.json
+          tar -C balcony-log -czf "$file" \
+            build-manifest.json dist/balcony-log/browser src/server server.ts scripts/pi-package.json
+          digest="$(sha256sum "$file" | cut -d' ' -f1)"
+          echo "artifact_name=balcony-build-${sha}" >> "$GITHUB_OUTPUT"
+          echo "artifact_file=${file}" >> "$GITHUB_OUTPUT"
+          echo "artifact_digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "commit_sha=${sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload exact build artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ steps.meta.outputs.artifact_name }}
+          path: ${{ steps.meta.outputs.artifact_file }}
+          if-no-files-found: error
+          retention-days: 30
+
+  staging:
+    needs: build
+    runs-on: [self-hosted, staging, pi4, control]
+    steps:
+      - name: Checkout balcony exact SHA read-only
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: dalexsy/balcony-log
+          ref: ${{ needs.build.outputs.commit-sha }}
+          path: balcony-log
+          ssh-key: ${{ secrets.BALCONY_LOG_READ_KEY }}
+          persist-credentials: false
+
+      - name: Checkout directory read-only
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: dalexsy/directory
+          path: directory
+          ssh-key: ${{ secrets.DIRECTORY_READ_KEY }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}
+          path: artifact
+
+      - name: Verify and extract exact artifact
+        run: |
+          set -euo pipefail
+          file="artifact/${{ needs.build.outputs.artifact-file }}"
+          echo "${{ needs.build.outputs.artifact-digest }}  ${file}" | sha256sum -c -
+          tar -C balcony-log -xzf "$file"
+          test "$(node -p "require('./balcony-log/build-manifest.json').commitSha")" = "${{ needs.build.outputs.commit-sha }}"
+
+      - name: Install test tooling without lifecycle scripts
+        working-directory: balcony-log
+        run: npm install --ignore-scripts --legacy-peer-deps --include=dev --no-audit --no-fund
+
+      - name: Verify exact dist and mobile invariants
+        working-directory: balcony-log
+        run: |
+          npm run verify:dist
+          node scripts/check-watch-mobile-layout.mjs
+
+      - name: Run self-contained mobile viewport and pinch test
+        working-directory: balcony-log
+        env:
+          EXPECTED_COMMIT_SHA: ${{ needs.build.outputs.commit-sha }}
+          EXPECTED_ARTIFACT_DIGEST: ${{ needs.build.outputs.artifact-digest }}
+          LIVE_VIDEO: "0"
+          LIVE_POLL_ONLY: "1"
+          REMOTE_VIEW_PASSWORD: ""
+        run: |
+          set -euo pipefail
+          npm run serve > /tmp/balcony-control-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          npx wait-on http://127.0.0.1:3838/watch --timeout 45000
+          npm run verify:watch-mobile-layout
+
+      - name: Write immutable staging audit
+        run: |
+          mkdir -p staging-audit
+          printf '{"schemaVersion":1,"ok":true,"stage":"staging","commitSha":"%s","artifactDigest":"%s"}\n' \
+            "${{ needs.build.outputs.commit-sha }}" \
+            "${{ needs.build.outputs.artifact-digest }}" > staging-audit/audit.json
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: staging-audit
+          path: staging-audit/audit.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mobile-layout-evidence
+          path: balcony-log/artifacts/mobile-layout
+          if-no-files-found: error
+          retention-days: 30
+
+  promote:
+    needs: [build, staging]
+    uses: dalexsy/balcony-deploy-control/.github/workflows/promote.yml@24510ffa62f2d6c6741da79c11397073a675dafb
+    with:
+      artifact-name: ${{ needs.build.outputs.artifact-name }}
+      artifact-file: ${{ needs.build.outputs.artifact-file }}
+      artifact-digest: ${{ needs.build.outputs.artifact-digest }}
+      staging-audit-name: staging-audit
+      commit-sha: ${{ needs.build.outputs.commit-sha }}
