@@ -13,10 +13,10 @@ function fixture() {
   fs.writeFileSync(artifactPath, "immutable balcony artifact");
   const digest = sha256(artifactPath);
   const github = {
-    repository: "dalexsy/balcony-log",
+    repository: "dalexsy/balcony-deploy-control",
     ref: "refs/heads/main",
-    sha: SHA,
-    event: "push",
+    sha: "c".repeat(40),
+    event: "schedule",
     runId: "123",
     runAttempt: "1",
   };
@@ -44,7 +44,7 @@ test("accepts only the exact staged artifact", () => {
 for (const mutation of [
   (f) => (f.github.repository = "attacker/repo"),
   (f) => (f.github.ref = "refs/heads/feature"),
-  (f) => (f.github.sha = "b".repeat(40)),
+  (f) => (f.github.sha = "invalid"),
   (f) => (f.github.event = "pull_request"),
   (f) => (f.stagingAudit.ok = false),
   (f) => (f.stagingAudit.commitSha = "b".repeat(40)),

@@ -21,11 +21,13 @@ export function verifyPromotion({
   const failures = [];
   if (!SHA_RE.test(expectedSha)) failures.push("invalid expected commit SHA");
   if (!DIGEST_RE.test(expectedDigest)) failures.push("invalid expected artifact digest");
-  if (github.repository !== "dalexsy/balcony-log") failures.push("caller repository denied");
-  if (github.ref !== "refs/heads/main") failures.push("caller ref denied");
-  if (github.sha !== expectedSha) failures.push("GitHub SHA mismatch");
-  if (github.event !== "push" && github.event !== "workflow_dispatch") {
-    failures.push("caller event denied");
+  if (github.repository !== "dalexsy/balcony-deploy-control") {
+    failures.push("controller repository denied");
+  }
+  if (github.ref !== "refs/heads/main") failures.push("controller ref denied");
+  if (!SHA_RE.test(github.sha)) failures.push("invalid controller SHA");
+  if (github.event !== "schedule" && github.event !== "workflow_dispatch") {
+    failures.push("controller event denied");
   }
   if (!fs.existsSync(artifactPath)) failures.push("artifact missing");
   const actualDigest = fs.existsSync(artifactPath) ? sha256(artifactPath) : null;
@@ -43,8 +45,9 @@ export function verifyPromotion({
     artifactDigest: actualDigest,
     workflowRunId: github.runId,
     workflowRunAttempt: github.runAttempt,
-    callerRepository: github.repository,
-    callerRef: github.ref,
+    controllerCommitSha: github.sha,
+    controllerRepository: github.repository,
+    controllerRef: github.ref,
     failures,
   };
 }
