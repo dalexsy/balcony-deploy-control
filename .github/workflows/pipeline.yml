@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   fleet-gate:
-    uses: dalexsy/balcony-deploy-control/.github/workflows/reusable-fleet-gate.yml@main
+    uses: ./.github/workflows/reusable-fleet-gate.yml
     with:
       app-name: balcony-deploy-control
       app-repo: dalexsy/balcony-deploy-control

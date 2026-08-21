@@ -164,7 +164,11 @@ jobs:
           BALCONY_PUBLIC_URL: http://127.0.0.1:3840
         run: |
           set -euo pipefail
-          npm ci --ignore-scripts --legacy-peer-deps --include=dev --no-audit --no-fund
+          if [[ -f package-lock.json ]]; then
+            npm ci --ignore-scripts --legacy-peer-deps --include=dev --no-audit --no-fund
+          else
+            npm install --ignore-scripts --legacy-peer-deps --include=dev --no-audit --no-fund
+          fi
           if npm run | grep -q 'lint:ui'; then npm run lint:ui; fi
           if npm run | grep -q 'build'; then npm run build; fi
           if [[ -f scripts/test-zero-trust-deploy-boundary.mjs ]]; then
