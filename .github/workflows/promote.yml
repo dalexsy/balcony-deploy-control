@@ -1,0 +1,86 @@
+name: zero-trust-balcony-promote
+
+on:
+  workflow_call:
+    inputs:
+      artifact-name:
+        required: true
+        type: string
+      artifact-file:
+        required: true
+        type: string
+      artifact-digest:
+        required: true
+        type: string
+      staging-audit-name:
+        required: true
+        type: string
+      commit-sha:
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  attestations: write
+  contents: read
+  id-token: write
+
+jobs:
+  verify-and-request-production:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout immutable control plane
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: dalexsy/balcony-deploy-control
+          ref: ${{ github.workflow_sha }}
+          path: control
+
+      - name: Download immutable build artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: evidence/build
+
+      - name: Download staging attestation
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ${{ inputs.staging-audit-name }}
+          path: evidence/staging
+
+      - name: Verify caller, SHA, digest, and staging evidence
+        run: |
+          node control/scripts/verify-promotion.mjs \
+            --sha="${{ inputs.commit-sha }}" \
+            --digest="${{ inputs.artifact-digest }}" \
+            --artifact="evidence/build/${{ inputs.artifact-file }}" \
+            --staging="evidence/staging/audit.json" \
+            --out="control-audit.json"
+
+      - name: Attest exact build provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a
+        with:
+          subject-path: evidence/build/${{ inputs.artifact-file }}
+
+      - name: Publish immutable control evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: control-audit
+          path: control-audit.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Request production through OIDC-only endpoint
+        run: |
+          set -euo pipefail
+          test -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}"
+          test -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}"
+          oidc_json="$(curl -fsS \
+            -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=dryl-balcony-deploy")"
+          oidc_token="$(node -e 'const fs=require("fs"); process.stdout.write(JSON.parse(fs.readFileSync(0,"utf8")).value)' <<<"$oidc_json")"
+          curl -fsS \
+            -H "Authorization: Bearer ${oidc_token}" \
+            -H "Content-Type: application/json" \
+            --data-binary @control-audit.json \
+            https://deploy-balcony.dryl.io/v1/promote
