@@ -181,9 +181,10 @@ jobs:
           REMOTE_VIEW_PASSWORD: ""
         run: |
           set -euo pipefail
-          npm run serve > /tmp/balcony-control-server.log 2>&1 &
+          sudo fuser -k 3838/tcp 2>/dev/null || true
+          setsid npm run serve > /tmp/balcony-control-server.log 2>&1 &
           server_pid=$!
-          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          trap 'kill -- "-${server_pid}" 2>/dev/null || true' EXIT
           npx wait-on http://127.0.0.1:3838/watch --timeout 45000
           npm run verify:watch-mobile-layout
 
