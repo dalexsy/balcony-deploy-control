@@ -16,7 +16,7 @@ function fixture() {
     repository: "dalexsy/balcony-deploy-control",
     ref: "refs/heads/main",
     sha: "c".repeat(40),
-    event: "schedule",
+    event: "workflow_call",
     runId: "123",
     runAttempt: "1",
   };
@@ -35,17 +35,20 @@ function fixture() {
   return { artifactPath, digest, github, stagingAudit };
 }
 
-test("accepts only the exact staged artifact", () => {
-  const f = fixture();
-  assert.equal(
-    verifyPromotion({
-      expectedSha: SHA,
-      expectedDigest: f.digest,
-      ...f,
-    }).ok,
-    true,
-  );
-});
+for (const event of ["workflow_call", "workflow_dispatch", "push"]) {
+  test(`accepts controller event ${event}`, () => {
+    const f = fixture();
+    f.github.event = event;
+    assert.equal(
+      verifyPromotion({
+        expectedSha: SHA,
+        expectedDigest: f.digest,
+        ...f,
+      }).ok,
+      true,
+    );
+  });
+}
 
 for (const mutation of [
   (f) => (f.github.repository = "attacker/repo"),

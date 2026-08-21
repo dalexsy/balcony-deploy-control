@@ -26,7 +26,12 @@ export function verifyPromotion({
   }
   if (github.ref !== "refs/heads/main") failures.push("controller ref denied");
   if (!SHA_RE.test(github.sha)) failures.push("invalid controller SHA");
-  if (github.event !== "schedule" && github.event !== "workflow_dispatch") {
+  const allowedEvents = new Set([
+    "workflow_call",
+    "workflow_dispatch",
+    "push",
+  ]);
+  if (!allowedEvents.has(github.event)) {
     failures.push("controller event denied");
   }
   if (!fs.existsSync(artifactPath)) failures.push("artifact missing");

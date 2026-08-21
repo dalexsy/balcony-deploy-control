@@ -1,6 +1,8 @@
 name: unattended-balcony-delivery
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -227,7 +229,7 @@ jobs:
 
   promote:
     needs: [build, staging]
-    uses: dalexsy/balcony-deploy-control/.github/workflows/promote.yml@9c6998f731c43c5f0bc6eb282ab70d18e66b0078
+    uses: ./.github/workflows/promote.yml
     with:
       artifact-name: ${{ needs.build.outputs.artifact-name }}
       artifact-file: ${{ needs.build.outputs.artifact-file }}
@@ -257,3 +259,32 @@ jobs:
             "artifact/${{ needs.build.outputs.artifact-file }}" \
             "${{ needs.build.outputs.artifact-digest }}" \
             "${{ needs.build.outputs.commit-sha }}"
+
+  verify-production:
+    needs: [build, staging, promote, activate]
+    runs-on: [self-hosted, staging, pi4, control]
+    steps:
+      - name: Checkout balcony exact SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: dalexsy/balcony-log
+          ref: ${{ needs.build.outputs.commit-sha }}
+          path: balcony-log
+          ssh-key: ${{ secrets.BALCONY_LOG_READ_KEY }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+
+      - name: Install verify tooling
+        working-directory: balcony-log
+        run: npm install --ignore-scripts --legacy-peer-deps --include=dev --no-audit --no-fund
+
+      - name: Public /watch screen FPS after production activate
+        working-directory: balcony-log
+        env:
+          BALCONY_PUBLIC_URL: "https://balcony.dryl.io"
+          BALCONY_MIN_SCREEN_FPS: "10"
+          LIVE_POLL_ONLY: "1"
+        run: npm run verify:screen-fps
