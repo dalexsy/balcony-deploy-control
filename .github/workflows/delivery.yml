@@ -171,23 +171,6 @@ jobs:
           npm run verify:dist
           node scripts/check-watch-mobile-layout.mjs
 
-      - name: Layout pinch test is not stream proof
-        working-directory: balcony-log
-        env:
-          LIVE_VIDEO: "0"
-          LIVE_POLL_ONLY: "1"
-          REMOTE_VIEW_PASSWORD: ""
-          PORT: "3840"
-          BALCONY_TEST_URL: "http://127.0.0.1:3840"
-        run: |
-          set -euo pipefail
-          sudo fuser -k 3840/tcp 2>/dev/null || true
-          setsid npm run serve > /tmp/balcony-control-layout.log 2>&1 &
-          server_pid=$!
-          trap 'kill -- "-${server_pid}" 2>/dev/null || true' EXIT
-          npx wait-on http://127.0.0.1:3840/watch --timeout 45000
-          npm run verify:watch-mobile-layout
-
       - name: Prove live cafe remux on staging hostname
         working-directory: balcony-log
         env:
@@ -212,6 +195,23 @@ jobs:
           EXPECTED_ARTIFACT_DIGEST="${{ needs.build.outputs.artifact-digest }}" \
           STAGING_STREAM_JSON=artifacts/staging-stream/stream.json \
             node scripts/write-staging-stream-audit.mjs "${{ github.workspace }}/staging-audit/audit.json"
+
+      - name: Layout pinch test is not stream proof
+        working-directory: balcony-log
+        env:
+          LIVE_VIDEO: "0"
+          LIVE_POLL_ONLY: "1"
+          REMOTE_VIEW_PASSWORD: ""
+          PORT: "3840"
+          BALCONY_TEST_URL: "http://127.0.0.1:3840"
+        run: |
+          set -euo pipefail
+          sudo fuser -k 3840/tcp 2>/dev/null || true
+          setsid npm run serve > /tmp/balcony-control-layout.log 2>&1 &
+          server_pid=$!
+          trap 'kill -- "-${server_pid}" 2>/dev/null || true' EXIT
+          npx wait-on http://127.0.0.1:3840/watch --timeout 45000
+          npm run verify:watch-mobile-layout
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
