@@ -210,7 +210,7 @@ jobs:
 
   promote:
     needs: [build, staging]
-    uses: dalexsy/balcony-deploy-control/.github/workflows/promote.yml@772768535998d9b3758c628a39662fab53304a2e
+    uses: dalexsy/balcony-deploy-control/.github/workflows/promote.yml@29973b78a614ecc270b1b5c8d8822fa27e74801a
     with:
       artifact-name: ${{ needs.build.outputs.artifact-name }}
       artifact-file: ${{ needs.build.outputs.artifact-file }}
