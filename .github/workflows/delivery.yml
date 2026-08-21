@@ -116,6 +116,8 @@ jobs:
   staging:
     needs: build
     runs-on: [self-hosted, staging, pi4, control]
+    env:
+      DRYL_PASS: ${{ secrets.DRYL_PASS }}
     steps:
       - name: Checkout balcony exact SHA read-only
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -261,6 +263,8 @@ jobs:
   verify-production:
     needs: [build, staging, promote, activate]
     runs-on: [self-hosted, staging, pi4, control]
+    env:
+      DRYL_PASS: ${{ secrets.DRYL_PASS }}
     steps:
       - name: Checkout balcony exact SHA
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
