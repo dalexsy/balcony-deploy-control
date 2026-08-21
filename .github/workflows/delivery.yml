@@ -196,7 +196,7 @@ jobs:
           LIVE_POLL_ONLY: "1"
           REMOTE_VIEW_PASSWORD: ""
           BALCONY_PUBLIC_URL: "http://balcony.staging.dryl.io"
-          BALCONY_MIN_SCREEN_FPS: "10"
+          BALCONY_MIN_SCREEN_FPS: "5"
           WATCH_SCREENSHOT_DIR: ${{ github.workspace }}/balcony-log/artifacts/staging-stream
         run: |
           set -euo pipefail
