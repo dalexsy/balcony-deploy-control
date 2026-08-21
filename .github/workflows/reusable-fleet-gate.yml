@@ -1,0 +1,177 @@
+name: reusable-fleet-gate
+
+on:
+  workflow_call:
+    inputs:
+      app-name:
+        description: Application folder / site id
+        required: true
+        type: string
+      app-repo:
+        required: false
+        type: string
+        default: ""
+      app-ref:
+        required: false
+        type: string
+        default: main
+      app-path:
+        required: false
+        type: string
+        default: "."
+
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: "false"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  DRYL_ENV: staging
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fleet-gate-${{ inputs.app-name }}
+  cancel-in-progress: true
+
+jobs:
+  semantic-quality:
+    name: commitlint-${{ inputs.app-name }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout app source read-only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ${{ inputs.app-repo != '' && inputs.app-repo || format('dalexsy/{0}', inputs.app-name) }}
+          ref: ${{ inputs.app-ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24"
+
+      - name: Fail-closed commitlint and reject wip history
+        working-directory: ${{ inputs.app-path }}
+        run: |
+          set -euo pipefail
+          test -f package.json
+          npm install --ignore-scripts --no-audit --no-fund \
+            @commitlint/cli@21.2.2 @commitlint/config-conventional@21.2.2
+          if [[ ! -f commitlint.config.cjs && ! -f commitlint.config.js && ! -f .commitlintrc.json ]]; then
+            printf '%s\n' 'module.exports = { extends: ["@commitlint/config-conventional"] };' \
+              > /tmp/fleet-commitlint.cjs
+            export COMMITLINT_CONFIG=/tmp/fleet-commitlint.cjs
+          fi
+          BASE="$(git merge-base HEAD origin/main 2>/dev/null || git rev-list --max-parents=0 HEAD)"
+          if [[ -n "${COMMITLINT_CONFIG:-}" ]]; then
+            npx commitlint --config "${COMMITLINT_CONFIG}" --from "${BASE}" --to HEAD
+          else
+            npx commitlint --from "${BASE}" --to HEAD
+          fi
+          if git log --format=%s "${BASE}..HEAD" | grep -Eiq '(^|[[:space:]])(wip|updates?)([[:space:]]|:|$)|auto-commit wip'; then
+            echo "non-conventional history in ${{ inputs.app-name }}"
+            git log --format=%s "${BASE}..HEAD" | grep -Ei '(^|[[:space:]])(wip|updates?)([[:space:]]|:|$)|auto-commit wip' || true
+            exit 1
+          fi
+
+  scale-gate:
+    name: scale-200-500-${{ inputs.app-name }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout app source read-only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ${{ inputs.app-repo != '' && inputs.app-repo || format('dalexsy/{0}', inputs.app-name) }}
+          ref: ${{ inputs.app-ref }}
+          persist-credentials: false
+
+      - name: Fail if any file exceeds 200 lines or source dir exceeds 500
+        working-directory: ${{ inputs.app-path }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, sys
+          SKIP_DIRS = {
+              "node_modules", "dist", "dist-server", "build", ".git", ".angular",
+              "static", "coverage", "storybook-static", ".gradle",
+          }
+          SKIP_DIR_BUDGET = SKIP_DIRS | {"public"}
+          EXTS = {".ts", ".html", ".scss", ".js", ".mjs", ".kt"}
+          root = os.getcwd()
+          file_hits, dir_hits = [], []
+          for dirpath, dirnames, filenames in os.walk(root):
+              dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
+              rel_dir = os.path.relpath(dirpath, root).replace("\\", "/")
+              parts = set(rel_dir.split("/")) if rel_dir != "." else set()
+              budget_skip = bool(parts & SKIP_DIR_BUDGET)
+              total = 0
+              for name in filenames:
+                  ext = os.path.splitext(name)[1].lower()
+                  if ext not in EXTS or name.endswith(".min.js") or name == "dryl-ui.mjs":
+                      continue
+                  if ".spec." in name or ".generated." in name:
+                      continue
+                  path = os.path.join(dirpath, name)
+                  with open(path, "r", encoding="utf-8", errors="ignore") as fh:
+                      lines = sum(1 for _ in fh)
+                  rel = os.path.relpath(path, root).replace("\\", "/")
+                  if lines > 200:
+                      file_hits.append((rel, lines))
+                  total += lines
+              if not budget_skip and total > 500:
+                  dir_hits.append(("." if rel_dir == "." else rel_dir, total))
+          failed = False
+          for rel, lines in sorted(file_hits, key=lambda x: -x[1]):
+              print(f"bloated-file: {rel} ({lines} lines > 200)", file=sys.stderr)
+              failed = True
+          for rel, lines in sorted(dir_hits, key=lambda x: -x[1]):
+              print(f"bloated-directory: {rel} ({lines} lines > 500)", file=sys.stderr)
+              failed = True
+          if failed:
+              sys.exit(1)
+          print("scale-gate passed (file <=200, directory <=500)")
+          PY
+
+  staging-checklist:
+    name: staging-airgap-${{ inputs.app-name }}
+    needs: [semantic-quality, scale-gate]
+    runs-on: [self-hosted, staging, pi4, control]
+    env:
+      DRYL_ENV: staging
+      LIVE_POLL_ONLY: "1"
+      CI: "true"
+    steps:
+      - name: Checkout app source read-only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ${{ inputs.app-repo != '' && inputs.app-repo || format('dalexsy/{0}', inputs.app-name) }}
+          ref: ${{ inputs.app-ref }}
+          persist-credentials: false
+
+      - name: Set up Node 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24"
+
+      - name: Refuse production endpoints in the environment
+        run: |
+          set -euo pipefail
+          if printenv | grep -Ei '192\.168\.178\.79|balcony\.dryl\.io|admin\.dryl\.io|https://[a-z0-9.-]+\.dryl\.io'; then
+            echo "production endpoint leaked into staging environment for ${{ inputs.app-name }}"
+            exit 1
+          fi
+          test "${DRYL_ENV}" = "staging"
+
+      - name: Local staging build and audit (air-gapped)
+        working-directory: ${{ inputs.app-path }}
+        env:
+          DRYL_ENV: staging
+          BALCONY_PUBLIC_URL: http://127.0.0.1:3840
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --legacy-peer-deps --include=dev --no-audit --no-fund
+          if npm run | grep -q 'lint:ui'; then npm run lint:ui; fi
+          if npm run | grep -q 'build'; then npm run build; fi
+          if [[ -f scripts/test-zero-trust-deploy-boundary.mjs ]]; then
+            node scripts/test-zero-trust-deploy-boundary.mjs
+          fi
