@@ -140,6 +140,14 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Ensure staging browser dependency
+        run: |
+          if ! command -v chromium >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq chromium
+          fi
+          chromium --version
+
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: ${{ needs.build.outputs.artifact-name }}
@@ -202,7 +210,7 @@ jobs:
 
   promote:
     needs: [build, staging]
-    uses: dalexsy/balcony-deploy-control/.github/workflows/promote.yml@24510ffb69916e738a577ed49596e2b7084d2923
+    uses: dalexsy/balcony-deploy-control/.github/workflows/promote.yml@772768535998d9b3758c628a39662fab53304a2e
     with:
       artifact-name: ${{ needs.build.outputs.artifact-name }}
       artifact-file: ${{ needs.build.outputs.artifact-file }}
