@@ -1,6 +1,8 @@
 name: unattended-balcony-delivery
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -169,29 +171,47 @@ jobs:
           npm run verify:dist
           node scripts/check-watch-mobile-layout.mjs
 
-      - name: Run self-contained mobile viewport and pinch test
+      - name: Layout pinch test is not stream proof
         working-directory: balcony-log
         env:
-          EXPECTED_COMMIT_SHA: ${{ needs.build.outputs.commit-sha }}
-          EXPECTED_ARTIFACT_DIGEST: ${{ needs.build.outputs.artifact-digest }}
           LIVE_VIDEO: "0"
           LIVE_POLL_ONLY: "1"
           REMOTE_VIEW_PASSWORD: ""
+          PORT: "3840"
+          BALCONY_TEST_URL: "http://127.0.0.1:3840"
         run: |
           set -euo pipefail
-          sudo fuser -k 3838/tcp 2>/dev/null || true
-          setsid npm run serve > /tmp/balcony-control-server.log 2>&1 &
+          sudo fuser -k 3840/tcp 2>/dev/null || true
+          setsid npm run serve > /tmp/balcony-control-layout.log 2>&1 &
           server_pid=$!
           trap 'kill -- "-${server_pid}" 2>/dev/null || true' EXIT
-          npx wait-on http://127.0.0.1:3838/watch --timeout 45000
+          npx wait-on http://127.0.0.1:3840/watch --timeout 45000
           npm run verify:watch-mobile-layout
 
-      - name: Write immutable staging audit
+      - name: Prove live cafe remux on staging hostname
+        working-directory: balcony-log
+        env:
+          LIVE_VIDEO: "1"
+          LIVE_STREAM_URL: "tcp/h264://192.168.178.43:8888"
+          LIVE_POLL_ONLY: "1"
+          REMOTE_VIEW_PASSWORD: ""
+          BALCONY_PUBLIC_URL: "http://balcony.staging.dryl.io"
+          BALCONY_MIN_SCREEN_FPS: "10"
+          WATCH_SCREENSHOT_DIR: ${{ github.workspace }}/balcony-log/artifacts/staging-stream
         run: |
-          mkdir -p staging-audit
-          printf '{"schemaVersion":1,"ok":true,"stage":"staging","commitSha":"%s","artifactDigest":"%s"}\n' \
-            "${{ needs.build.outputs.commit-sha }}" \
-            "${{ needs.build.outputs.artifact-digest }}" > staging-audit/audit.json
+          set -euo pipefail
+          test "${LIVE_VIDEO}" = "1"
+          mkdir -p artifacts/staging-stream
+          python scripts/assert-cafe-live-h264.py | tee artifacts/staging-stream/cafe-h264.json
+          npm run verify:screen-fps
+          STAGING_FPS_JSON=artifacts/staging-stream/latest-screen-fps-result.json \
+          STAGING_CAFE_JSON=artifacts/staging-stream/cafe-h264.json \
+          STAGING_STREAM_JSON=artifacts/staging-stream/stream.json \
+            node scripts/collect-staging-stream-evidence.mjs
+          EXPECTED_COMMIT_SHA="${{ needs.build.outputs.commit-sha }}" \
+          EXPECTED_ARTIFACT_DIGEST="${{ needs.build.outputs.artifact-digest }}" \
+          STAGING_STREAM_JSON=artifacts/staging-stream/stream.json \
+            node scripts/write-staging-stream-audit.mjs "${{ github.workspace }}/staging-audit/audit.json"
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -209,7 +229,7 @@ jobs:
 
   promote:
     needs: [build, staging]
-    uses: dalexsy/balcony-deploy-control/.github/workflows/promote.yml@9c6998f731c43c5f0bc6eb282ab70d18e66b0078
+    uses: ./.github/workflows/promote.yml
     with:
       artifact-name: ${{ needs.build.outputs.artifact-name }}
       artifact-file: ${{ needs.build.outputs.artifact-file }}
@@ -239,3 +259,32 @@ jobs:
             "artifact/${{ needs.build.outputs.artifact-file }}" \
             "${{ needs.build.outputs.artifact-digest }}" \
             "${{ needs.build.outputs.commit-sha }}"
+
+  verify-production:
+    needs: [build, staging, promote, activate]
+    runs-on: [self-hosted, staging, pi4, control]
+    steps:
+      - name: Checkout balcony exact SHA
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: dalexsy/balcony-log
+          ref: ${{ needs.build.outputs.commit-sha }}
+          path: balcony-log
+          ssh-key: ${{ secrets.BALCONY_LOG_READ_KEY }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+
+      - name: Install verify tooling
+        working-directory: balcony-log
+        run: npm install --ignore-scripts --legacy-peer-deps --include=dev --no-audit --no-fund
+
+      - name: Public /watch screen FPS after production activate
+        working-directory: balcony-log
+        env:
+          BALCONY_PUBLIC_URL: "https://balcony.dryl.io"
+          BALCONY_MIN_SCREEN_FPS: "10"
+          LIVE_POLL_ONLY: "1"
+        run: npm run verify:screen-fps

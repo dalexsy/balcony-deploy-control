@@ -16,7 +16,7 @@ function fixture() {
     repository: "dalexsy/balcony-deploy-control",
     ref: "refs/heads/main",
     sha: "c".repeat(40),
-    event: "schedule",
+    event: "workflow_call",
     runId: "123",
     runAttempt: "1",
   };
@@ -25,21 +25,30 @@ function fixture() {
     stage: "staging",
     commitSha: SHA,
     artifactDigest: digest,
+    stream: {
+      liveVideo: true,
+      fixtureSubstituted: false,
+      visualFps: 12,
+      cafeCodec: "h264",
+    },
   };
   return { artifactPath, digest, github, stagingAudit };
 }
 
-test("accepts only the exact staged artifact", () => {
-  const f = fixture();
-  assert.equal(
-    verifyPromotion({
-      expectedSha: SHA,
-      expectedDigest: f.digest,
-      ...f,
-    }).ok,
-    true,
-  );
-});
+for (const event of ["workflow_call", "workflow_dispatch", "push"]) {
+  test(`accepts controller event ${event}`, () => {
+    const f = fixture();
+    f.github.event = event;
+    assert.equal(
+      verifyPromotion({
+        expectedSha: SHA,
+        expectedDigest: f.digest,
+        ...f,
+      }).ok,
+      true,
+    );
+  });
+}
 
 for (const mutation of [
   (f) => (f.github.repository = "attacker/repo"),
@@ -49,6 +58,10 @@ for (const mutation of [
   (f) => (f.stagingAudit.ok = false),
   (f) => (f.stagingAudit.commitSha = "b".repeat(40)),
   (f) => (f.stagingAudit.artifactDigest = "0".repeat(64)),
+  (f) => delete f.stagingAudit.stream,
+  (f) => (f.stagingAudit.stream.liveVideo = false),
+  (f) => (f.stagingAudit.stream.fixtureSubstituted = true),
+  (f) => (f.stagingAudit.stream.visualFps = 2),
   (f) => fs.appendFileSync(f.artifactPath, "tampered"),
 ]) {
   test("fails closed on altered authority or evidence", () => {

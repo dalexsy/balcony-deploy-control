@@ -26,7 +26,12 @@ export function verifyPromotion({
   }
   if (github.ref !== "refs/heads/main") failures.push("controller ref denied");
   if (!SHA_RE.test(github.sha)) failures.push("invalid controller SHA");
-  if (github.event !== "schedule" && github.event !== "workflow_dispatch") {
+  const allowedEvents = new Set([
+    "workflow_call",
+    "workflow_dispatch",
+    "push",
+  ]);
+  if (!allowedEvents.has(github.event)) {
     failures.push("controller event denied");
   }
   if (!fs.existsSync(artifactPath)) failures.push("artifact missing");
@@ -37,6 +42,17 @@ export function verifyPromotion({
   if (stagingAudit.commitSha !== expectedSha) failures.push("staging SHA mismatch");
   if (stagingAudit.artifactDigest !== expectedDigest) {
     failures.push("staging artifact digest mismatch");
+  }
+  const stream = stagingAudit.stream || {};
+  if (stream.liveVideo !== true) failures.push("staging liveVideo must be true");
+  if (stream.fixtureSubstituted !== false) {
+    failures.push("staging fixtureSubstituted must be false");
+  }
+  if (!(Number(stream.visualFps) >= 10)) {
+    failures.push("staging visualFps must be >= 10");
+  }
+  if (stream.cafeCodec !== "h264") {
+    failures.push("staging cafeCodec must be h264");
   }
   return {
     schemaVersion: 1,

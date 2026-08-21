@@ -1,0 +1,27 @@
+name: auto-merge-control
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: auto-merge-control-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    if: github.repository == 'dalexsy/balcony-deploy-control'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge ready control PR with Actions bypass
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          gh pr merge "$PR" --repo dalexsy/balcony-deploy-control --merge --admin
