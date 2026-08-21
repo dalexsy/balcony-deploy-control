@@ -1,0 +1,17 @@
+name: balcony-deploy-control-fleet-gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  fleet-gate:
+    uses: dalexsy/balcony-deploy-control/.github/workflows/reusable-fleet-gate.yml@main
+    with:
+      app-name: balcony-deploy-control
+      app-repo: dalexsy/balcony-deploy-control
