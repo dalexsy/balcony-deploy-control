@@ -1,8 +1,6 @@
 name: unattended-balcony-delivery
 
 on:
-  schedule:
-    - cron: "*/15 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -211,10 +209,33 @@ jobs:
 
   promote:
     needs: [build, staging]
-    uses: dalexsy/balcony-deploy-control/.github/workflows/promote.yml@29973b78a614ecc270b1b5c8d8822fa27e74801a
+    uses: dalexsy/balcony-deploy-control/.github/workflows/promote.yml@9c6998f731c43c5f0bc6eb282ab70d18e66b0078
     with:
       artifact-name: ${{ needs.build.outputs.artifact-name }}
       artifact-file: ${{ needs.build.outputs.artifact-file }}
       artifact-digest: ${{ needs.build.outputs.artifact-digest }}
       staging-audit-name: staging-audit
       commit-sha: ${{ needs.build.outputs.commit-sha }}
+
+  activate:
+    needs: [build, staging, promote]
+    runs-on: [self-hosted, staging, pi4, control]
+    steps:
+      - name: Checkout control activate script
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: dalexsy/balcony-deploy-control
+          persist-credentials: false
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}
+          path: artifact
+
+      - name: Activate exact attested artifact on production
+        run: |
+          chmod +x scripts/activate-production.sh
+          scripts/activate-production.sh \
+            "artifact/${{ needs.build.outputs.artifact-file }}" \
+            "${{ needs.build.outputs.artifact-digest }}" \
+            "${{ needs.build.outputs.commit-sha }}"
