@@ -59,15 +59,10 @@ jobs:
             @commitlint/cli@21.2.2 @commitlint/config-conventional@21.2.2
           if [[ ! -f commitlint.config.cjs && ! -f commitlint.config.js && ! -f .commitlintrc.json ]]; then
             printf '%s\n' 'module.exports = { extends: ["@commitlint/config-conventional"] };' \
-              > /tmp/fleet-commitlint.cjs
-            export COMMITLINT_CONFIG=/tmp/fleet-commitlint.cjs
+              > commitlint.config.cjs
           fi
           BASE="$(git merge-base HEAD origin/main 2>/dev/null || git rev-list --max-parents=0 HEAD)"
-          if [[ -n "${COMMITLINT_CONFIG:-}" ]]; then
-            npx commitlint --config "${COMMITLINT_CONFIG}" --from "${BASE}" --to HEAD
-          else
-            npx commitlint --from "${BASE}" --to HEAD
-          fi
+          npx commitlint --from "${BASE}" --to HEAD
           if git log --format=%s "${BASE}..HEAD" | grep -Eiq '(^|[[:space:]])(wip|updates?)([[:space:]]|:|$)|auto-commit wip'; then
             echo "non-conventional history in ${{ inputs.app-name }}"
             git log --format=%s "${BASE}..HEAD" | grep -Ei '(^|[[:space:]])(wip|updates?)([[:space:]]|:|$)|auto-commit wip' || true

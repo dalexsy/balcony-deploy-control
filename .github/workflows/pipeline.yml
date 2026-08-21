@@ -15,3 +15,4 @@ jobs:
     with:
       app-name: balcony-deploy-control
       app-repo: dalexsy/balcony-deploy-control
+      app-ref: ${{ github.event.pull_request.head.sha || github.sha }}
