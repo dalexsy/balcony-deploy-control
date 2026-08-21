@@ -38,6 +38,17 @@ export function verifyPromotion({
   if (stagingAudit.artifactDigest !== expectedDigest) {
     failures.push("staging artifact digest mismatch");
   }
+  const stream = stagingAudit.stream || {};
+  if (stream.liveVideo !== true) failures.push("staging liveVideo must be true");
+  if (stream.fixtureSubstituted !== false) {
+    failures.push("staging fixtureSubstituted must be false");
+  }
+  if (!(Number(stream.visualFps) >= 10)) {
+    failures.push("staging visualFps must be >= 10");
+  }
+  if (stream.cafeCodec !== "h264") {
+    failures.push("staging cafeCodec must be h264");
+  }
   return {
     schemaVersion: 1,
     ok: failures.length === 0,
