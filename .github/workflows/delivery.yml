@@ -161,6 +161,20 @@ jobs:
           tar -C balcony-log -xzf "$file"
           test "$(node -p "require('./balcony-log/build-manifest.json').commitSha")" = "${{ needs.build.outputs.commit-sha }}"
 
+      - name: Activate exact candidate on staging
+        run: |
+          set -euo pipefail
+          file="artifact/${{ needs.build.outputs.artifact-file }}"
+          asset="$(sed -n 's/.*WATCH_ASSET_VERSION = "\([^"]*\)".*/\1/p' \
+            balcony-log/src/server/watch/watch-asset-version.ts)"
+          test -n "$asset"
+          chmod +x scripts/activate-staging.sh
+          scripts/activate-staging.sh \
+            "$file" \
+            "${{ needs.build.outputs.artifact-digest }}" \
+            "${{ needs.build.outputs.commit-sha }}" \
+            "$asset"
+
       - name: Install test tooling without lifecycle scripts
         working-directory: balcony-log
         run: npm install --ignore-scripts --legacy-peer-deps --include=dev --no-audit --no-fund
