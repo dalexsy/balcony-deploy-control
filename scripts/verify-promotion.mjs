@@ -54,6 +54,17 @@ export function verifyPromotion({
   if (stream.cafeCodec !== "h264") {
     failures.push("staging cafeCodec must be h264");
   }
+  const observed = stagingAudit.observed;
+  if (!observed || typeof observed !== "object") {
+    failures.push("staging audit missing browser-observed build manifest");
+  } else {
+    if (observed.commitSha !== expectedSha) {
+      failures.push("staging browser-observed commitSha mismatch");
+    }
+    if (!observed.watchAssetVersion || typeof observed.watchAssetVersion !== "string") {
+      failures.push("staging browser-observed watchAssetVersion missing");
+    }
+  }
   return {
     schemaVersion: 1,
     ok: failures.length === 0,

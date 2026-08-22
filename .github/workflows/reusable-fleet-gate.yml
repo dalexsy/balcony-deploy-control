@@ -174,3 +174,8 @@ jobs:
           if [[ -f scripts/test-zero-trust-deploy-boundary.mjs ]]; then
             node scripts/test-zero-trust-deploy-boundary.mjs
           fi
+          # CENTRAL_FLEET_VALIDATION_REPAIR — apps that ship a live build-manifest
+          # verifier contract must prove it fails closed on mismatch/malformed/fetch-error.
+          if [[ -f scripts/test-build-manifest-verifier.mjs ]]; then
+            node scripts/test-build-manifest-verifier.mjs
+          fi
