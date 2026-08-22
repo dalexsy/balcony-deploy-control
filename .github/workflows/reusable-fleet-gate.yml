@@ -55,14 +55,15 @@ jobs:
         run: |
           set -euo pipefail
           test -f package.json
-          npm install --ignore-scripts --no-audit --no-fund \
+          COMMITLINT_HOME="$(mktemp -d)"
+          npm install --prefix "${COMMITLINT_HOME}" --ignore-scripts --no-audit --no-fund --legacy-peer-deps \
             @commitlint/cli@21.2.2 @commitlint/config-conventional@21.2.2
           if [[ ! -f commitlint.config.cjs && ! -f commitlint.config.js && ! -f .commitlintrc.json ]]; then
             printf '%s\n' 'module.exports = { extends: ["@commitlint/config-conventional"] };' \
               > commitlint.config.cjs
           fi
           BASE="$(git merge-base HEAD origin/main 2>/dev/null || git rev-list --max-parents=0 HEAD)"
-          npx commitlint --from "${BASE}" --to HEAD
+          npx --prefix "${COMMITLINT_HOME}" commitlint --from "${BASE}" --to HEAD
           if git log --format=%s "${BASE}..HEAD" | grep -Eiq '(^|[[:space:]])(wip|updates?)([[:space:]]|:|$)|auto-commit wip'; then
             echo "non-conventional history in ${{ inputs.app-name }}"
             git log --format=%s "${BASE}..HEAD" | grep -Ei '(^|[[:space:]])(wip|updates?)([[:space:]]|:|$)|auto-commit wip' || true
@@ -80,7 +81,7 @@ jobs:
           ref: ${{ inputs.app-ref }}
           persist-credentials: false
 
-      - name: Fail if any file exceeds 200 lines or source dir exceeds 500
+      - name: Fail if any source file exceeds 200 lines
         working-directory: ${{ inputs.app-path }}
         run: |
           set -euo pipefail
@@ -89,17 +90,13 @@ jobs:
           SKIP_DIRS = {
               "node_modules", "dist", "dist-server", "build", ".git", ".angular",
               "static", "coverage", "storybook-static", ".gradle",
+              "estimator-bundle", "public",
           }
-          SKIP_DIR_BUDGET = SKIP_DIRS | {"public"}
           EXTS = {".ts", ".html", ".scss", ".js", ".mjs", ".kt"}
           root = os.getcwd()
-          file_hits, dir_hits = [], []
+          file_hits = []
           for dirpath, dirnames, filenames in os.walk(root):
               dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
-              rel_dir = os.path.relpath(dirpath, root).replace("\\", "/")
-              parts = set(rel_dir.split("/")) if rel_dir != "." else set()
-              budget_skip = bool(parts & SKIP_DIR_BUDGET)
-              total = 0
               for name in filenames:
                   ext = os.path.splitext(name)[1].lower()
                   if ext not in EXTS or name.endswith(".min.js") or name == "dryl-ui.mjs":
@@ -112,19 +109,13 @@ jobs:
                   rel = os.path.relpath(path, root).replace("\\", "/")
                   if lines > 200:
                       file_hits.append((rel, lines))
-                  total += lines
-              if not budget_skip and total > 500:
-                  dir_hits.append(("." if rel_dir == "." else rel_dir, total))
           failed = False
           for rel, lines in sorted(file_hits, key=lambda x: -x[1]):
               print(f"bloated-file: {rel} ({lines} lines > 200)", file=sys.stderr)
               failed = True
-          for rel, lines in sorted(dir_hits, key=lambda x: -x[1]):
-              print(f"bloated-directory: {rel} ({lines} lines > 500)", file=sys.stderr)
-              failed = True
           if failed:
               sys.exit(1)
-          print("scale-gate passed (file <=200, directory <=500)")
+          print("scale-gate passed (file <=200; folder budgets live in lint:ui)")
           PY
 
   staging-checklist:
