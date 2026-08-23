@@ -10,7 +10,7 @@ target="/home/pi/balcony-log"
 
 test "$(hostname)" = "$expected_host"
 test -f "${target}/.env"
-grep -qx 'DRYL_ENV=staging' "${target}/.env"
+grep -qE '^DRYL_ENV=staging($|[^A-Za-z0-9_])' "${target}/.env"
 echo "${digest}  ${artifact}" | sha256sum -c -
 tar -C "$target" -xzf "$artifact"
 test "$(python3 -c "import json; print(json.load(open('${target}/build-manifest.json'))['commitSha'])")" = "$sha"
