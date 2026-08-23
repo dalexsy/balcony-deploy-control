@@ -31,6 +31,10 @@ function fixture() {
       visualFps: 12,
       cafeCodec: "h264",
     },
+    observed: {
+      commitSha: SHA,
+      watchAssetVersion: "20260823093953-71fc419e5a",
+    },
   };
   return { artifactPath, digest, github, stagingAudit };
 }
@@ -63,6 +67,9 @@ for (const mutation of [
   (f) => (f.stagingAudit.stream.fixtureSubstituted = true),
   (f) => (f.stagingAudit.stream.visualFps = 2),
   (f) => fs.appendFileSync(f.artifactPath, "tampered"),
+  (f) => delete f.stagingAudit.observed,
+  (f) => (f.stagingAudit.observed.commitSha = "b".repeat(40)),
+  (f) => (f.stagingAudit.observed.watchAssetVersion = ""),
 ]) {
   test("fails closed on altered authority or evidence", () => {
     const f = fixture();

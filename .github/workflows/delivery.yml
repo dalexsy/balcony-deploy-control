@@ -21,6 +21,7 @@ jobs:
       artifact-file: ${{ steps.meta.outputs.artifact_file }}
       artifact-digest: ${{ steps.meta.outputs.artifact_digest }}
       commit-sha: ${{ steps.meta.outputs.commit_sha }}
+      watch-asset-version: ${{ steps.meta.outputs.watch_asset_version }}
     steps:
       - name: Checkout balcony source read-only
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -92,11 +93,12 @@ jobs:
         run: |
           set -euo pipefail
           sha="$(git -C balcony-log rev-parse HEAD)"
+          asset="$(sed -n 's/.*WATCH_ASSET_VERSION = "\([^"]*\)".*/\1/p' \
+            balcony-log/src/server/watch/watch-asset-version.ts)"
+          test -n "$asset"
           file="balcony-${sha}.tar.gz"
-          node_version="$(node --version)"
-          npm_version="$(npm --version)"
-          printf '{"schemaVersion":1,"commitSha":"%s","node":"%s","npm":"%s"}\n' \
-            "$sha" "$node_version" "$npm_version" > balcony-log/build-manifest.json
+          printf '{"commitSha":"%s","watchAssetVersion":"%s"}\n' \
+            "$sha" "$asset" > balcony-log/build-manifest.json
           tar -C balcony-log -czf "$file" \
             build-manifest.json dist/balcony-log/browser src/server server.ts scripts/pi-package.json
           digest="$(sha256sum "$file" | cut -d' ' -f1)"
@@ -104,6 +106,7 @@ jobs:
           echo "artifact_file=${file}" >> "$GITHUB_OUTPUT"
           echo "artifact_digest=${digest}" >> "$GITHUB_OUTPUT"
           echo "commit_sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "watch_asset_version=${asset}" >> "$GITHUB_OUTPUT"
 
       - name: Upload exact build artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -161,6 +164,22 @@ jobs:
           tar -C balcony-log -xzf "$file"
           test "$(node -p "require('./balcony-log/build-manifest.json').commitSha")" = "${{ needs.build.outputs.commit-sha }}"
 
+      - name: Checkout control plane scripts
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          path: control
+
+      - name: Activate exact candidate on staging
+        run: |
+          set -euo pipefail
+          chmod +x control/scripts/activate-staging.sh
+          control/scripts/activate-staging.sh \
+            "artifact/${{ needs.build.outputs.artifact-file }}" \
+            "${{ needs.build.outputs.artifact-digest }}" \
+            "${{ needs.build.outputs.commit-sha }}" \
+            "${{ needs.build.outputs.watch-asset-version }}"
+
       - name: Install test tooling without lifecycle scripts
         working-directory: balcony-log
         run: npm install --ignore-scripts --legacy-peer-deps --include=dev --no-audit --no-fund
@@ -181,6 +200,8 @@ jobs:
           BALCONY_PUBLIC_URL: "http://balcony.staging.dryl.io"
           BALCONY_MIN_SCREEN_FPS: "5"
           WATCH_SCREENSHOT_DIR: ${{ github.workspace }}/balcony-log/artifacts/staging-stream
+          EXPECTED_COMMIT_SHA: ${{ needs.build.outputs.commit-sha }}
+          EXPECTED_WATCH_ASSET_VERSION: ${{ needs.build.outputs.watch-asset-version }}
         run: |
           set -euo pipefail
           test "${LIVE_VIDEO}" = "1"
@@ -194,7 +215,14 @@ jobs:
           EXPECTED_COMMIT_SHA="${{ needs.build.outputs.commit-sha }}" \
           EXPECTED_ARTIFACT_DIGEST="${{ needs.build.outputs.artifact-digest }}" \
           STAGING_STREAM_JSON=artifacts/staging-stream/stream.json \
+          STAGING_FPS_RESULT_JSON=artifacts/staging-stream/latest-screen-fps-result.json \
             node scripts/write-staging-stream-audit.mjs "${{ github.workspace }}/staging-audit/audit.json"
+
+      - name: Staging log layout includes /watch link
+        working-directory: balcony-log
+        env:
+          BALCONY_PUBLIC_URL: "http://balcony.staging.dryl.io"
+        run: npm run verify:log-layout
 
       - name: Layout pinch test is not stream proof
         working-directory: balcony-log
@@ -297,4 +325,12 @@ jobs:
           BALCONY_PUBLIC_URL: "https://balcony.dryl.io"
           BALCONY_MIN_SCREEN_FPS: "10"
           LIVE_POLL_ONLY: "1"
+          EXPECTED_COMMIT_SHA: ${{ needs.build.outputs.commit-sha }}
+          EXPECTED_WATCH_ASSET_VERSION: ${{ needs.build.outputs.watch-asset-version }}
         run: npm run verify:screen-fps
+
+      - name: Public log layout after production activate
+        working-directory: balcony-log
+        env:
+          BALCONY_PUBLIC_URL: "https://balcony.dryl.io"
+        run: npm run verify:log-layout
