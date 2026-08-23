@@ -24,13 +24,37 @@ while (( SECONDS < deadline )); do
   status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
     --max-time 2 http://127.0.0.1:3838/api/health || true)"
   if [[ "$active" == "active" && "$status" == "200" ]]; then
-    echo "[ok] balcony-log active and /api/health returned 200"
-    exit 0
+    break
   fi
   sleep 1
 done
+if [[ "${active:-}" != "active" || "${status:-}" != "200" ]]; then
+  echo "[fail] balcony-log did not become ready after activation" >&2
+  systemctl status balcony-log --no-pager >&2 || true
+  journalctl -u balcony-log -n 50 --no-pager >&2 || true
+  exit 1
+fi
 
-echo "[fail] balcony-log did not become ready after activation" >&2
+deadline=$((SECONDS + 180))
+while (( SECONDS < deadline )); do
+  ready="$(curl -fsS --max-time 2 http://127.0.0.1:3838/api/health \
+    | python3 -c 'import json,sys
+try:
+  d=json.load(sys.stdin)
+  s=d.get("stream") or {}
+  ok = d.get("ok") is True and s.get("connected") is True and s.get("remuxInitReady") is True and not (d.get("issues") or [])
+  print("1" if ok else "0")
+except Exception:
+  print("0")
+' || echo 0)"
+  if [[ "$ready" == "1" ]]; then
+    echo "[ok] balcony-log active, healthy, remux producing"
+    exit 0
+  fi
+  sleep 2
+done
+
+echo "[fail] balcony-log remux did not become ready after activation" >&2
 systemctl status balcony-log --no-pager >&2 || true
 journalctl -u balcony-log -n 50 --no-pager >&2 || true
 exit 1

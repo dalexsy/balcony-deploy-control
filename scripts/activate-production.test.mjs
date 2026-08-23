@@ -13,5 +13,6 @@ test("activation restarts and waits for the backend readiness endpoint", () => {
   assert.match(source, /http:\/\/127\.0\.0\.1:3838\/api\/health/);
   assert.match(source, /"\$active" == "active" && "\$status" == "200"/);
   assert.match(source, /journalctl -u balcony-log -n 50/);
+  assert.match(source, /remuxInitReady/);
   assert.doesNotMatch(source, /\nkill "\$pid"/);
 });
