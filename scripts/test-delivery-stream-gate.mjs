@@ -22,6 +22,11 @@ assert.match(delivery, /BALCONY_PUBLIC_URL: "https:\/\/balcony\.dryl\.io"/);
 assert.match(delivery, /BALCONY_MIN_SCREEN_FPS: "5"/);
 assert.match(delivery, /BALCONY_MIN_SCREEN_FPS: "10"/);
 assert.match(delivery, /npm run verify:screen-fps/);
+assert.match(delivery, /printf '\{"commitSha":"%s","watchAssetVersion":"%s"\}/);
+assert.match(delivery, /activate-staging\.sh/);
+assert.match(delivery, /STAGING_FPS_RESULT_JSON=/);
+assert.match(delivery, /npm run verify:log-layout/);
+assert.doesNotMatch(delivery, /schemaVersion":1,"commitSha"/);
 assert.ok(delivery.includes("DRYL_PASS: ${{ secrets.DRYL_PASS }}"));
 const productionVerify = delivery.slice(delivery.indexOf("  verify-production:"));
 assert.match(
