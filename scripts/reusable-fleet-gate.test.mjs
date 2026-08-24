@@ -24,6 +24,15 @@ test("caller-repo airgap uses an available ephemeral runner", () => {
   assert.doesNotMatch(stagingJob, /runs-on: \[self-hosted/);
 });
 
+test("airgap restores fleet sibling layout before building", () => {
+  const stagingJob = workflow.split("  staging-checklist:")[1];
+  assert.match(stagingJob, /path: app/);
+  assert.match(stagingJob, /repository: dalexsy\/directory[\s\S]*?path: directory/);
+  assert.match(stagingJob, /repository: dalexsy\/dryl[\s\S]*?path: dryl/);
+  assert.match(stagingJob, /working-directory: dryl\/ui[\s\S]*?npm run build:lib/);
+  assert.match(stagingJob, /working-directory: app\/\$\{\{ inputs\.app-path \}\}/);
+});
+
 test("scale gate prefers the app's canonical scanner", () => {
   assert.match(workflow, /if \[\[ -f scripts\/check-max-lines\.mjs \]\]/);
   assert.match(workflow, /node scripts\/check-max-lines\.mjs/);
