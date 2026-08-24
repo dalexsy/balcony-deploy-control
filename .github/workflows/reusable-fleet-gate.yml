@@ -143,12 +143,36 @@ jobs:
         with:
           repository: ${{ inputs.app-repo != '' && inputs.app-repo || format('dalexsy/{0}', inputs.app-name) }}
           ref: ${{ inputs.app-ref != '' && inputs.app-ref || github.sha }}
+          path: app
+          persist-credentials: false
+
+      - name: Checkout Directory build tooling read-only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: dalexsy/directory
+          ref: main
+          path: directory
+          persist-credentials: false
+
+      - name: Checkout shared dryl packages read-only
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: dalexsy/dryl
+          ref: main
+          path: dryl
           persist-credentials: false
 
       - name: Set up Node 24
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "24"
+
+      - name: Build shared UI package
+        working-directory: dryl/ui
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --legacy-peer-deps --include=dev --no-audit --no-fund
+          npm run build:lib
 
       - name: Refuse production endpoints in the environment
         run: |
@@ -160,7 +184,7 @@ jobs:
           test "${DRYL_ENV}" = "staging"
 
       - name: Local staging build and audit (air-gapped)
-        working-directory: ${{ inputs.app-path }}
+        working-directory: app/${{ inputs.app-path }}
         env:
           DRYL_ENV: staging
           BALCONY_PUBLIC_URL: http://127.0.0.1:3840
