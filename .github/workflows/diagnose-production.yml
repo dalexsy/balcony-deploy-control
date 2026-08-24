@@ -26,6 +26,7 @@ jobs:
             ps -eo pid,ppid,%cpu,%mem,etime,stat,comm,args --sort=-%cpu | head -n 25
             echo "=== service ==="
             systemctl status balcony-log --no-pager || true
+            systemctl show balcony-log -p NRestarts,ActiveEnterTimestamp,ExecMainStatus || true
             echo "=== journal ==="
-            journalctl -u balcony-log -n 120 --no-pager || true
+            sudo journalctl -u balcony-log -n 200 --no-pager || true
           '
