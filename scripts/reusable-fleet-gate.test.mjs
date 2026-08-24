@@ -24,13 +24,15 @@ test("caller-repo airgap uses an available ephemeral runner", () => {
   assert.doesNotMatch(stagingJob, /runs-on: \[self-hosted/);
 });
 
-test("airgap restores fleet sibling layout before building", () => {
+test("hosted airgap audits caller source without private siblings", () => {
   const stagingJob = workflow.split("  staging-checklist:")[1];
-  assert.match(stagingJob, /path: app/);
-  assert.match(stagingJob, /repository: dalexsy\/directory[\s\S]*?path: directory/);
-  assert.match(stagingJob, /repository: dalexsy\/dryl[\s\S]*?path: dryl/);
-  assert.match(stagingJob, /working-directory: dryl\/ui[\s\S]*?npm run build:lib/);
-  assert.match(stagingJob, /working-directory: app\/\$\{\{ inputs\.app-path \}\}/);
+  assert.doesNotMatch(stagingJob, /repository: dalexsy\/(?:directory|dryl)/);
+  assert.match(stagingJob, /fetch-depth: 0/);
+  assert.match(stagingJob, /Hosted staging source audit/);
+  assert.match(stagingJob, /file dependency lock audit passed/);
+  assert.match(stagingJob, /node --check "\$file"/);
+  assert.match(stagingJob, /npm run test:ocr/);
+  assert.match(stagingJob, /working-directory: \$\{\{ inputs\.app-path \}\}/);
 });
 
 test("scale gate prefers the app's canonical scanner", () => {

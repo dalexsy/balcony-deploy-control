@@ -130,8 +130,8 @@ jobs:
     needs: [semantic-quality, scale-gate]
     # Reusable workflows execute in the caller repository. Personal-account
     # runners are repository-scoped, so the staging-control runner cannot pick
-    # up app-repo jobs. Keep PR builds air-gapped on an ephemeral hosted runner;
-    # the delivery workflow owns the real staging-control runner.
+    # up app-repo jobs. Hosted runners audit caller-owned source without private
+    # sibling repos; the delivery workflow owns the full staging build.
     runs-on: ubuntu-latest
     env:
       DRYL_ENV: staging
@@ -143,36 +143,13 @@ jobs:
         with:
           repository: ${{ inputs.app-repo != '' && inputs.app-repo || format('dalexsy/{0}', inputs.app-name) }}
           ref: ${{ inputs.app-ref != '' && inputs.app-ref || github.sha }}
-          path: app
-          persist-credentials: false
-
-      - name: Checkout Directory build tooling read-only
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: dalexsy/directory
-          ref: main
-          path: directory
-          persist-credentials: false
-
-      - name: Checkout shared dryl packages read-only
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: dalexsy/dryl
-          ref: main
-          path: dryl
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Set up Node 24
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: "24"
-
-      - name: Build shared UI package
-        working-directory: dryl/ui
-        run: |
-          set -euo pipefail
-          npm ci --ignore-scripts --legacy-peer-deps --include=dev --no-audit --no-fund
-          npm run build:lib
 
       - name: Refuse production endpoints in the environment
         run: |
@@ -183,8 +160,8 @@ jobs:
           fi
           test "${DRYL_ENV}" = "staging"
 
-      - name: Local staging build and audit (air-gapped)
-        working-directory: app/${{ inputs.app-path }}
+      - name: Hosted staging source audit (air-gapped)
+        working-directory: ${{ inputs.app-path }}
         env:
           DRYL_ENV: staging
           BALCONY_PUBLIC_URL: http://127.0.0.1:3840
@@ -195,8 +172,32 @@ jobs:
           else
             npm install --ignore-scripts --legacy-peer-deps --include=dev --no-audit --no-fund
           fi
-          if npm run | grep -q 'lint:ui'; then npm run lint:ui; fi
-          if npm run | grep -q 'build'; then npm run build; fi
+          node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+          const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+          const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
+          const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+          const locked = {
+            ...lock.packages?.[""]?.dependencies,
+            ...lock.packages?.[""]?.devDependencies,
+          };
+          for (const [name, spec] of Object.entries(deps)) {
+            if (!String(spec).startsWith("file:")) continue;
+            if (locked[name] !== spec) {
+              throw new Error(`${name} lock mismatch: package=${spec} lock=${locked[name]}`);
+            }
+          }
+          console.log("file dependency lock audit passed");
+          NODE
+          git diff --name-only origin/main...HEAD -- '*.mjs' | while read -r file; do
+            if [[ -f "$file" ]]; then node --check "$file"; fi
+          done
+          if node -e "process.exit(require('./package.json').scripts?.['test:ocr'] ? 0 : 1)"; then
+            npm run test:ocr
+          fi
+          if [[ -f scripts/reusable-fleet-gate.test.mjs ]]; then
+            node --test scripts/reusable-fleet-gate.test.mjs
+          fi
           if [[ -f scripts/test-zero-trust-deploy-boundary.mjs ]]; then
             node scripts/test-zero-trust-deploy-boundary.mjs
           fi
