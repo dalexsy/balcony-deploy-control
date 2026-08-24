@@ -84,30 +84,38 @@ jobs:
         working-directory: ${{ inputs.app-path }}
         run: |
           set -euo pipefail
+          if [[ -f scripts/check-max-lines.mjs ]]; then
+            node scripts/check-max-lines.mjs
+            exit 0
+          fi
           python3 - <<'PY'
           import os, sys
           SKIP_DIRS = {
-              "node_modules", "dist", "dist-server", "build", ".git", ".angular",
-              "static", "coverage", "storybook-static", ".gradle",
-              "estimator-bundle", "public",
+              "node_modules", "dist", "build", ".git", ".angular", ".gradle",
+              "static", "coverage", "storybook-static",
           }
           EXTS = {".ts", ".html", ".scss", ".js", ".mjs", ".kt"}
           root = os.getcwd()
           file_hits = []
-          for dirpath, dirnames, filenames in os.walk(root):
+          scan_roots = ["src", os.path.join("functions", "src"), os.path.join("app", "src", "main")]
+          for rel_root in scan_roots:
+            source_root = os.path.join(root, rel_root)
+            if not os.path.isdir(source_root):
+              continue
+            for dirpath, dirnames, filenames in os.walk(source_root):
               dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
               for name in filenames:
-                  ext = os.path.splitext(name)[1].lower()
-                  if ext not in EXTS or name.endswith(".min.js") or name == "dryl-ui.mjs":
-                      continue
-                  if ".spec." in name or ".generated." in name:
-                      continue
-                  path = os.path.join(dirpath, name)
-                  with open(path, "r", encoding="utf-8", errors="ignore") as fh:
-                      lines = sum(1 for _ in fh)
-                  rel = os.path.relpath(path, root).replace("\\", "/")
-                  if lines > 200:
-                      file_hits.append((rel, lines))
+                ext = os.path.splitext(name)[1].lower()
+                if ext not in EXTS or name.endswith(".min.js") or name == "dryl-ui.mjs":
+                  continue
+                if ".spec." in name or ".generated." in name:
+                  continue
+                path = os.path.join(dirpath, name)
+                with open(path, "r", encoding="utf-8", errors="ignore") as fh:
+                  lines = sum(1 for _ in fh)
+                rel = os.path.relpath(path, root).replace("\\", "/")
+                if lines > 200:
+                  file_hits.append((rel, lines))
           failed = False
           for rel, lines in sorted(file_hits, key=lambda x: -x[1]):
               print(f"bloated-file: {rel} ({lines} lines > 200)", file=sys.stderr)

@@ -23,3 +23,10 @@ test("caller-repo airgap uses an available ephemeral runner", () => {
   assert.match(stagingJob, /runs-on: ubuntu-latest/);
   assert.doesNotMatch(stagingJob, /runs-on: \[self-hosted/);
 });
+
+test("scale gate prefers the app's canonical scanner", () => {
+  assert.match(workflow, /if \[\[ -f scripts\/check-max-lines\.mjs \]\]/);
+  assert.match(workflow, /node scripts\/check-max-lines\.mjs/);
+  assert.match(workflow, /scan_roots = \["src"/);
+  assert.doesNotMatch(workflow, /for dirpath, dirnames, filenames in os\.walk\(root\)/);
+});
