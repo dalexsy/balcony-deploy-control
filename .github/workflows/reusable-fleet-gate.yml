@@ -14,7 +14,7 @@ on:
       app-ref:
         required: false
         type: string
-        default: main
+        default: ""
       app-path:
         required: false
         type: string
@@ -41,7 +41,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: ${{ inputs.app-repo != '' && inputs.app-repo || format('dalexsy/{0}', inputs.app-name) }}
-          ref: ${{ inputs.app-ref }}
+          ref: ${{ inputs.app-ref != '' && inputs.app-ref || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -77,7 +77,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: ${{ inputs.app-repo != '' && inputs.app-repo || format('dalexsy/{0}', inputs.app-name) }}
-          ref: ${{ inputs.app-ref }}
+          ref: ${{ inputs.app-ref != '' && inputs.app-ref || github.sha }}
           persist-credentials: false
 
       - name: Fail if any source file exceeds 200 lines
@@ -120,7 +120,11 @@ jobs:
   staging-checklist:
     name: staging-airgap-${{ inputs.app-name }}
     needs: [semantic-quality, scale-gate]
-    runs-on: [self-hosted, staging, pi4, control]
+    # Reusable workflows execute in the caller repository. Personal-account
+    # runners are repository-scoped, so the staging-control runner cannot pick
+    # up app-repo jobs. Keep PR builds air-gapped on an ephemeral hosted runner;
+    # the delivery workflow owns the real staging-control runner.
+    runs-on: ubuntu-latest
     env:
       DRYL_ENV: staging
       LIVE_POLL_ONLY: "1"
@@ -130,7 +134,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: ${{ inputs.app-repo != '' && inputs.app-repo || format('dalexsy/{0}', inputs.app-name) }}
-          ref: ${{ inputs.app-ref }}
+          ref: ${{ inputs.app-ref != '' && inputs.app-ref || github.sha }}
           persist-credentials: false
 
       - name: Set up Node 24
