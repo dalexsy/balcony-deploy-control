@@ -10,6 +10,10 @@ jobs:
   heal:
     runs-on: [self-hosted, staging, pi4, control]
     steps:
+      - name: Run the balcony-log Pi's own local heal (correct SSH keys to cafe)
+        run: |
+          ssh -o BatchMode=yes -o ConnectTimeout=8 pi@192.168.178.79 \
+            'cd /home/pi/balcony-log && python3 scripts/balcony_stream_recovery.py --local --heal'
       - name: Nudge cafe camera, live-reset, and restart if still stuck
         run: |
           ssh -o BatchMode=yes -o ConnectTimeout=8 pi@192.168.178.79 '
