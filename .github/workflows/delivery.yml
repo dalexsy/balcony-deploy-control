@@ -208,6 +208,7 @@ jobs:
           mkdir -p artifacts/staging-stream
           python scripts/assert-cafe-live-h264.py | tee artifacts/staging-stream/cafe-h264.json
           npm run verify:screen-fps
+          npm run verify:watch-pip-no-teardown
           STAGING_FPS_JSON=artifacts/staging-stream/latest-screen-fps-result.json \
           STAGING_CAFE_JSON=artifacts/staging-stream/cafe-h264.json \
           STAGING_STREAM_JSON=artifacts/staging-stream/stream.json \
@@ -328,6 +329,15 @@ jobs:
           EXPECTED_COMMIT_SHA: ${{ needs.build.outputs.commit-sha }}
           EXPECTED_WATCH_ASSET_VERSION: ${{ needs.build.outputs.watch-asset-version }}
         run: npm run verify:screen-fps
+
+      - name: Public PiP must keep a moving playhead
+        working-directory: balcony-log
+        env:
+          BALCONY_PUBLIC_URL: "https://balcony.dryl.io"
+          LIVE_POLL_ONLY: "1"
+          EXPECTED_COMMIT_SHA: ${{ needs.build.outputs.commit-sha }}
+          EXPECTED_WATCH_ASSET_VERSION: ${{ needs.build.outputs.watch-asset-version }}
+        run: npm run verify:watch-pip-no-teardown
 
       - name: Public log layout after production activate
         working-directory: balcony-log
