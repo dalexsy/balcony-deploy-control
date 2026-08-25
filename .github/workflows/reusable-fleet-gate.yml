@@ -201,3 +201,6 @@ jobs:
           if [[ -f scripts/test-zero-trust-deploy-boundary.mjs ]]; then
             node scripts/test-zero-trust-deploy-boundary.mjs
           fi
+          if node -e "process.exit(require('./package.json').scripts?.['verify:bundles-compiled'] ? 0 : 1)"; then
+            npm run verify:bundles-compiled
+          fi

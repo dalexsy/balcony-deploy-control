@@ -79,6 +79,7 @@ jobs:
         run: |
           npm run test:zero-trust
           npm run lint:ui
+          npm run verify:bundles-compiled
           npm run lint:watch-static
 
       - name: Build once

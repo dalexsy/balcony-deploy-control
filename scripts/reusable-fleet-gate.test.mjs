@@ -35,6 +35,20 @@ test("hosted airgap audits caller source without private siblings", () => {
   assert.match(stagingJob, /working-directory: \$\{\{ inputs\.app-path \}\}/);
 });
 
+test("delivery runs verify:bundles-compiled before build", () => {
+  const delivery = readFileSync(
+    join(root, ".github", "workflows", "delivery.yml"),
+    "utf8",
+  );
+  assert.match(delivery, /npm run verify:bundles-compiled/);
+});
+
+test("hosted airgap runs verify:bundles-compiled when the app defines it", () => {
+  const stagingJob = workflow.split("  staging-checklist:")[1];
+  assert.match(stagingJob, /verify:bundles-compiled/);
+  assert.match(stagingJob, /npm run verify:bundles-compiled/);
+});
+
 test("scale gate prefers the app's canonical scanner", () => {
   assert.match(workflow, /if \[\[ -f scripts\/check-max-lines\.mjs \]\]/);
   assert.match(workflow, /node scripts\/check-max-lines\.mjs/);
