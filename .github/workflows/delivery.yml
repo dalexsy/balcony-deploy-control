@@ -212,8 +212,13 @@ jobs:
           python scripts/assert-cafe-live-h264.py | tee artifacts/staging-stream/cafe-h264.json
           BALCONY_WARMUP_PUBLIC=1 REMUX_WARMUP_MIN_FRAGS=8 REMUX_WARMUP_MAX_S=90 \
             python scripts/remux-warmup.py
-          npm run verify:screen-fps
-          npm run verify:watch-pip-no-teardown
+          # Staging Chromium on the remux Pi cannot decode through LAN nginx
+          # (readyState 0 while origin HLS is producing). Origin header-auth
+          # is the remux-host visual proof; public CF 10fps is verify-production.
+          WATCH_PROBE_LOCAL=1 BALCONY_PUBLIC_URL=http://127.0.0.1:3838 \
+            npm run verify:screen-fps
+          WATCH_PROBE_LOCAL=1 BALCONY_PUBLIC_URL=http://127.0.0.1:3838 \
+            npm run verify:watch-pip-no-teardown
           STAGING_FPS_JSON=artifacts/staging-stream/latest-screen-fps-result.json \
           STAGING_CAFE_JSON=artifacts/staging-stream/cafe-h264.json \
           STAGING_STREAM_JSON=artifacts/staging-stream/stream.json \
