@@ -24,7 +24,7 @@ jobs:
       watch-asset-version: ${{ steps.meta.outputs.watch_asset_version }}
     steps:
       - name: Checkout balcony source read-only
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           repository: dalexsy/balcony-log
           ref: main
@@ -34,7 +34,7 @@ jobs:
           fetch-depth: 0
 
       - name: Checkout directory source read-only
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           repository: dalexsy/directory
           ref: main
@@ -43,7 +43,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout dryl packages read-only
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           repository: dalexsy/dryl
           ref: main
@@ -51,7 +51,7 @@ jobs:
           ssh-key: ${{ secrets.DRYL_READ_KEY }}
           persist-credentials: false
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: "22"
           cache: npm
@@ -110,7 +110,7 @@ jobs:
           echo "watch_asset_version=${asset}" >> "$GITHUB_OUTPUT"
 
       - name: Upload exact build artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ${{ steps.meta.outputs.artifact_name }}
           path: ${{ steps.meta.outputs.artifact_file }}
@@ -124,7 +124,7 @@ jobs:
       DRYL_PASS: ${{ secrets.DRYL_PASS }}
     steps:
       - name: Checkout balcony exact SHA read-only
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           repository: dalexsy/balcony-log
           ref: ${{ needs.build.outputs.commit-sha }}
@@ -133,14 +133,14 @@ jobs:
           persist-credentials: false
 
       - name: Checkout directory read-only
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           repository: dalexsy/directory
           path: directory
           ssh-key: ${{ secrets.DIRECTORY_READ_KEY }}
           persist-credentials: false
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: "22"
 
@@ -152,7 +152,7 @@ jobs:
           fi
           chromium --version
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: ${{ needs.build.outputs.artifact-name }}
           path: artifact
@@ -166,7 +166,7 @@ jobs:
           test "$(node -p "require('./balcony-log/build-manifest.json').commitSha")" = "${{ needs.build.outputs.commit-sha }}"
 
       - name: Checkout control plane scripts
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           persist-credentials: false
           path: control
@@ -243,14 +243,14 @@ jobs:
           npx wait-on http://127.0.0.1:3840/watch --timeout 45000
           npm run verify:watch-mobile-layout
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: staging-audit
           path: staging-audit/audit.json
           if-no-files-found: error
           retention-days: 30
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: mobile-layout-evidence
           path: balcony-log/artifacts/mobile-layout
@@ -272,12 +272,12 @@ jobs:
     runs-on: [self-hosted, staging, pi4, control]
     steps:
       - name: Checkout control activate script
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           repository: dalexsy/balcony-deploy-control
           persist-credentials: false
 
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: ${{ needs.build.outputs.artifact-name }}
           path: artifact
@@ -297,7 +297,7 @@ jobs:
       DRYL_PASS: ${{ secrets.DRYL_PASS }}
     steps:
       - name: Checkout balcony exact SHA
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           repository: dalexsy/balcony-log
           ref: ${{ needs.build.outputs.commit-sha }}
@@ -306,14 +306,14 @@ jobs:
           persist-credentials: false
 
       - name: Checkout directory read-only for verify credentials
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           repository: dalexsy/directory
           path: directory
           ssh-key: ${{ secrets.DIRECTORY_READ_KEY }}
           persist-credentials: false
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: "22"
 
