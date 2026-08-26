@@ -22,7 +22,6 @@ on:
 
 env:
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: "false"
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   DRYL_ENV: staging
 
 permissions:
@@ -38,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout app source read-only
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           repository: ${{ inputs.app-repo != '' && inputs.app-repo || format('dalexsy/{0}', inputs.app-name) }}
           ref: ${{ inputs.app-ref != '' && inputs.app-ref || github.sha }}
@@ -46,7 +45,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Node 24
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: "24"
 
@@ -74,7 +73,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout app source read-only
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           repository: ${{ inputs.app-repo != '' && inputs.app-repo || format('dalexsy/{0}', inputs.app-name) }}
           ref: ${{ inputs.app-ref != '' && inputs.app-ref || github.sha }}
@@ -139,7 +138,7 @@ jobs:
       CI: "true"
     steps:
       - name: Checkout app source read-only
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           repository: ${{ inputs.app-repo != '' && inputs.app-repo || format('dalexsy/{0}', inputs.app-name) }}
           ref: ${{ inputs.app-ref != '' && inputs.app-ref || github.sha }}
@@ -147,7 +146,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Node 24
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: "24"
 
