@@ -101,7 +101,9 @@ jobs:
           printf '{"commitSha":"%s","watchAssetVersion":"%s"}\n' \
             "$sha" "$asset" > balcony-log/build-manifest.json
           tar -C balcony-log -czf "$file" \
-            build-manifest.json dist/balcony-log/browser src/server server.ts scripts/pi-package.json
+            build-manifest.json dist/balcony-log/browser src/server server.ts \
+            scripts/pi-package.json scripts/pi-watch-probe.mjs \
+            scripts/lib/balcony_stream_health.py
           digest="$(sha256sum "$file" | cut -d' ' -f1)"
           echo "artifact_name=balcony-build-${sha}" >> "$GITHUB_OUTPUT"
           echo "artifact_file=${file}" >> "$GITHUB_OUTPUT"
@@ -208,6 +210,8 @@ jobs:
           test "${LIVE_VIDEO}" = "1"
           mkdir -p artifacts/staging-stream
           python scripts/assert-cafe-live-h264.py | tee artifacts/staging-stream/cafe-h264.json
+          BALCONY_WARMUP_PUBLIC=1 REMUX_WARMUP_MIN_FRAGS=8 REMUX_WARMUP_MAX_S=90 \
+            python scripts/remux-warmup.py
           npm run verify:screen-fps
           npm run verify:watch-pip-no-teardown
           STAGING_FPS_JSON=artifacts/staging-stream/latest-screen-fps-result.json \
@@ -330,6 +334,14 @@ jobs:
           EXPECTED_COMMIT_SHA: ${{ needs.build.outputs.commit-sha }}
           EXPECTED_WATCH_ASSET_VERSION: ${{ needs.build.outputs.watch-asset-version }}
         run: npm run verify:screen-fps
+
+      - name: Public /watch 90s sit (502/503 fail)
+        working-directory: balcony-log
+        env:
+          BALCONY_PUBLIC_URL: "https://balcony.dryl.io"
+          OBSERVE_WATCH_MS: "90000"
+          LIVE_POLL_ONLY: "1"
+        run: npm run observe:watch-viewer
 
       - name: Public PiP must keep a moving playhead
         working-directory: balcony-log
