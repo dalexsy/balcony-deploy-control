@@ -24,6 +24,7 @@ assert.match(delivery, /BALCONY_MIN_SCREEN_FPS: "10"/);
 assert.match(delivery, /npm run verify:screen-fps/);
 assert.match(delivery, /python scripts\/remux-warmup\.py/);
 assert.match(delivery, /WATCH_PROBE_LOCAL=1 BALCONY_PUBLIC_URL=http:\/\/127\.0\.0\.1:3838/);
+assert.match(delivery, /npm run verify:staging-origin-decode/);
 assert.match(delivery, /npm run observe:watch-viewer/);
 assert.match(delivery, /printf '\{"commitSha":"%s","watchAssetVersion":"%s"\}/);
 assert.match(delivery, /activate-staging\.sh/);
