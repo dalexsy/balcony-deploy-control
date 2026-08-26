@@ -210,7 +210,7 @@ jobs:
           test "${LIVE_VIDEO}" = "1"
           mkdir -p artifacts/staging-stream
           python scripts/assert-cafe-live-h264.py | tee artifacts/staging-stream/cafe-h264.json
-          BALCONY_WARMUP_PUBLIC=1 REMUX_WARMUP_MIN_FRAGS=8 REMUX_WARMUP_MAX_S=90 \
+          BALCONY_WARMUP_PUBLIC=1 REMUX_WARMUP_MIN_FRAGS=16 REMUX_WARMUP_MAX_S=90 \
             python scripts/remux-warmup.py
           # Staging Chromium on the remux Pi cannot decode through LAN nginx
           # (readyState 0 while origin HLS is producing). Origin header-auth
