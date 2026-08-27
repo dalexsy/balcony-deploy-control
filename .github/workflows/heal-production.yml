@@ -26,7 +26,8 @@ jobs:
             edge=192.168.178.79
           else
             edge=192.168.178.74
-            ssh -o BatchMode=yes -o ConnectTimeout=8 pi@$edge '
+            ssh -o BatchMode=yes -o ConnectTimeout=8 \
+              -o StrictHostKeyChecking=accept-new pi@$edge '
               set -euo pipefail
               for service in dryl-auth balcony-log cloudflared-balcony; do
                 sudo rm -f /etc/systemd/system/$service.service
