@@ -81,8 +81,17 @@ jobs:
           ssh -o BatchMode=yes -o ConnectTimeout=8 pi@$BALCONY_EDGE '
             set -euo pipefail
             echo "=== before ==="
-            curl -fsS --max-time 5 http://127.0.0.1:3838/api/health || true
+            HEALTH_BEFORE=$(curl -fsS --max-time 5 \
+              http://127.0.0.1:3838/api/health || true)
+            echo "$HEALTH_BEFORE"
             echo
+            if echo "$HEALTH_BEFORE" | grep -q "cafe-unreachable"; then
+              echo "=== cafe plug cycle ==="
+              cd /home/pi/balcony-log
+              BALCONY_CAFE_STILL_DOWN=1 \
+                python3 scripts/lib/balcony_stream_plug.py
+              sleep 40
+            fi
             echo "=== cafe restart ==="
             ssh -o BatchMode=yes -o ConnectTimeout=6 pi@192.168.178.43 \
               "curl -sf -m 5 -X POST http://127.0.0.1:8889/restart || sudo systemctl restart pi-camera" \

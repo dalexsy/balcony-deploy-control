@@ -15,6 +15,8 @@ test("heal installs tested recovery scripts and forces cafe power on", () => {
   assert.match(workflow, /test-balcony-stream-heal-plan\.py/);
   assert.match(workflow, /balcony_stream_plug\.py/);
   assert.match(workflow, /balcony_stream_heal\.py/);
+  assert.match(workflow, /BALCONY_CAFE_STILL_DOWN=1/);
+  assert.match(workflow, /cafe-unreachable/);
   assert.match(workflow, /lights\/65550\?power=true/);
   assert.match(workflow, /grep -q "\\"power\\":true"/);
   assert.doesNotMatch(workflow, /power=false/);
