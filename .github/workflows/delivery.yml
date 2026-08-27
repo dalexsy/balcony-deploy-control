@@ -230,7 +230,10 @@ jobs:
       - name: Staging log layout includes /watch link
         working-directory: balcony-log
         env:
-          BALCONY_PUBLIC_URL: "http://balcony.staging.dryl.io"
+          # Same origin as remux proof — HTTP staging hostname cannot attach
+          # Secure SSO cookies (login 401 / 302). Local header is the LAN gate.
+          BALCONY_PUBLIC_URL: "http://127.0.0.1:3838"
+          WATCH_PROBE_LOCAL: "1"
         run: npm run verify:log-layout
 
       - name: Layout pinch test is not stream proof
