@@ -19,3 +19,12 @@ test("heal installs tested recovery scripts and forces cafe power on", () => {
   assert.match(workflow, /grep -q "\\"power\\":true"/);
   assert.doesNotMatch(workflow, /power=false/);
 });
+
+test("heal restores the rollback edge and fails closed on stream health", () => {
+  assert.match(workflow, /BALCONY_EDGE/);
+  assert.match(workflow, /192\.168\.178\.74/);
+  assert.match(workflow, /service\.kiosk-disabled/);
+  assert.match(workflow, /systemctl is-active nginx dryl-auth balcony-log/);
+  assert.match(workflow, /Camera\/remux recovery postcondition failed/);
+  assert.match(workflow, /exit 1/);
+});
