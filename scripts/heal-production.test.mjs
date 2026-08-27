@@ -21,7 +21,10 @@ test("heal installs tested recovery scripts and forces cafe power on", () => {
 });
 
 test("heal restores the rollback edge and fails closed on stream health", () => {
+  assert.match(workflow, /cron: "\*\/5 \* \* \* \*"/);
   assert.match(workflow, /BALCONY_EDGE/);
+  assert.match(workflow, /BALCONY_RECOVERY_NEEDED/);
+  assert.match(workflow, /if: env\.BALCONY_RECOVERY_NEEDED == '1'/);
   assert.match(workflow, /192\.168\.178\.74/);
   assert.match(workflow, /StrictHostKeyChecking=accept-new/);
   assert.match(workflow, /service\.kiosk-disabled/);
