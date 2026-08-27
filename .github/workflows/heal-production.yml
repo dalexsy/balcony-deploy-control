@@ -19,6 +19,29 @@ jobs:
           ssh-key: ${{ secrets.BALCONY_LOG_READ_KEY }}
           persist-credentials: false
 
+      - name: Select or restore a reachable production edge
+        run: |
+          set -euo pipefail
+          if ssh -o BatchMode=yes -o ConnectTimeout=8 pi@192.168.178.79 true; then
+            edge=192.168.178.79
+          else
+            edge=192.168.178.74
+            ssh -o BatchMode=yes -o ConnectTimeout=8 pi@$edge '
+              set -euo pipefail
+              for service in dryl-auth balcony-log cloudflared-balcony; do
+                sudo rm -f /etc/systemd/system/$service.service
+                sudo cp /etc/systemd/system/$service.service.kiosk-disabled \
+                  /etc/systemd/system/$service.service
+              done
+              sudo systemctl daemon-reload
+              sudo systemctl start nginx dryl-auth balcony-log \
+                cloudflared-balcony foculus-pi-agent
+              systemctl is-active nginx dryl-auth balcony-log \
+                cloudflared-balcony foculus-pi-agent
+            '
+          fi
+          echo "BALCONY_EDGE=$edge" >> "$GITHUB_ENV"
+
       - name: Test and install cafe recovery scripts
         run: |
           set -euo pipefail
@@ -27,8 +50,8 @@ jobs:
           scp -o BatchMode=yes -o ConnectTimeout=8 \
             balcony-log/scripts/lib/balcony_stream_plug.py \
             balcony-log/scripts/lib/balcony_stream_heal.py \
-            pi@192.168.178.79:/tmp/
-          ssh -o BatchMode=yes -o ConnectTimeout=8 pi@192.168.178.79 '
+            pi@$BALCONY_EDGE:/tmp/
+          ssh -o BatchMode=yes -o ConnectTimeout=8 pi@$BALCONY_EDGE '
             set -euo pipefail
             install -m 0644 /tmp/balcony_stream_plug.py \
               /home/pi/balcony-log/scripts/lib/balcony_stream_plug.py
@@ -42,8 +65,8 @@ jobs:
 
       - name: Nudge cafe camera, live-reset, and restart if still stuck
         run: |
-          ssh -o BatchMode=yes -o ConnectTimeout=8 pi@192.168.178.79 '
-            set -u
+          ssh -o BatchMode=yes -o ConnectTimeout=8 pi@$BALCONY_EDGE '
+            set -euo pipefail
             echo "=== before ==="
             curl -fsS --max-time 5 http://127.0.0.1:3838/api/health || true
             echo
@@ -62,8 +85,16 @@ jobs:
             if ! echo "$HEALTH_AFTER" | grep -q "\"ok\":true"; then
               echo "=== hard service restart (remux still not producing) ==="
               sudo systemctl restart balcony-log
-              sleep 8
-              curl -fsS --max-time 5 http://127.0.0.1:3838/api/health || true
-              echo
             fi
+            for attempt in $(seq 1 18); do
+              HEALTH_AFTER=$(curl -fsS --max-time 5 \
+                http://127.0.0.1:3838/api/health || true)
+              echo "$HEALTH_AFTER"
+              if echo "$HEALTH_AFTER" | grep -q "\"ok\":true"; then
+                exit 0
+              fi
+              sleep 5
+            done
+            echo "Camera/remux recovery postcondition failed" >&2
+            exit 1
           '
