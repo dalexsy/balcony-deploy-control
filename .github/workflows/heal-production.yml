@@ -10,6 +10,36 @@ jobs:
   heal:
     runs-on: [self-hosted, staging, pi4, control]
     steps:
+      - name: Checkout balcony recovery source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          repository: dalexsy/balcony-log
+          ref: main
+          path: balcony-log
+          ssh-key: ${{ secrets.BALCONY_LOG_READ_KEY }}
+          persist-credentials: false
+
+      - name: Test and install cafe recovery scripts
+        run: |
+          set -euo pipefail
+          python3 balcony-log/scripts/test-balcony-stream-plug.py
+          python3 balcony-log/scripts/test-balcony-stream-heal-plan.py
+          scp -o BatchMode=yes -o ConnectTimeout=8 \
+            balcony-log/scripts/lib/balcony_stream_plug.py \
+            balcony-log/scripts/lib/balcony_stream_heal.py \
+            pi@192.168.178.79:/tmp/
+          ssh -o BatchMode=yes -o ConnectTimeout=8 pi@192.168.178.79 '
+            set -euo pipefail
+            install -m 0644 /tmp/balcony_stream_plug.py \
+              /home/pi/balcony-log/scripts/lib/balcony_stream_plug.py
+            install -m 0644 /tmp/balcony_stream_heal.py \
+              /home/pi/balcony-log/scripts/lib/balcony_stream_heal.py
+            state=$(curl -fsS -m 12 -X POST \
+              "http://127.0.0.1:8788/api/lights/65550?power=true")
+            echo "$state"
+            echo "$state" | grep -q "\"power\":true"
+          '
+
       - name: Nudge cafe camera, live-reset, and restart if still stuck
         run: |
           ssh -o BatchMode=yes -o ConnectTimeout=8 pi@192.168.178.79 '
