@@ -21,40 +21,46 @@ jobs:
           ssh-key: ${{ secrets.BALCONY_LOG_READ_KEY }}
           persist-credentials: false
 
-      - name: Select or restore a reachable production edge
+      - name: Select a reachable production edge (dryl-prod only — never the kiosk)
         run: |
           set -euo pipefail
+          # magicmirror (192.168.178.74) is a physical kiosk display in the
+          # apartment. It must never run balcony/auth/tunnel services again:
+          # doing so starves its own watchdog, flaps cloudflared, and forces
+          # kiosk page reloads that flash the screen bright white overnight.
+          # See .cursor/rules/debugging.md (2026-08-28 kiosk-pi-misuse).
           if ssh -o BatchMode=yes -o ConnectTimeout=8 pi@192.168.178.79 true; then
-            edge=192.168.178.79
+            echo "BALCONY_EDGE=192.168.178.79" >> "$GITHUB_ENV"
+            health=$(ssh -o BatchMode=yes -o ConnectTimeout=8 pi@192.168.178.79 \
+              'curl -fsS --max-time 5 http://127.0.0.1:3838/api/health' || true)
+            echo "$health"
+            if echo "$health" | grep -q '"ok":true'; then
+              echo "BALCONY_RECOVERY_NEEDED=0" >> "$GITHUB_ENV"
+            else
+              echo "BALCONY_RECOVERY_NEEDED=1" >> "$GITHUB_ENV"
+            fi
           else
-            edge=192.168.178.74
-            ssh -o BatchMode=yes -o ConnectTimeout=8 \
-              -o StrictHostKeyChecking=accept-new pi@$edge '
-              set -euo pipefail
-              for service in dryl-auth balcony-log cloudflared-balcony; do
-                sudo rm -f /etc/systemd/system/$service.service
-                sudo cp /etc/systemd/system/$service.service.kiosk-disabled \
-                  /etc/systemd/system/$service.service
-              done
-              sudo systemctl daemon-reload
-              sudo systemctl start nginx dryl-auth balcony-log \
-                cloudflared-balcony foculus-pi-agent
-              systemctl is-active nginx dryl-auth balcony-log \
-                cloudflared-balcony foculus-pi-agent
-            '
-          fi
-          echo "BALCONY_EDGE=$edge" >> "$GITHUB_ENV"
-          health=$(ssh -o BatchMode=yes -o ConnectTimeout=8 pi@$edge \
-            'curl -fsS --max-time 5 http://127.0.0.1:3838/api/health' || true)
-          echo "$health"
-          if echo "$health" | grep -q '"ok":true'; then
-            echo "BALCONY_RECOVERY_NEEDED=0" >> "$GITHUB_ENV"
-          else
+            echo "dryl-prod (192.168.178.79) has no LAN presence — no failover edge available."
+            echo "BALCONY_NO_EDGE=1" >> "$GITHUB_ENV"
             echo "BALCONY_RECOVERY_NEEDED=1" >> "$GITHUB_ENV"
           fi
 
+      - name: Cafe plug cycle with no production edge reachable
+        if: env.BALCONY_NO_EDGE == '1'
+        run: |
+          set -euo pipefail
+          python3 balcony-log/scripts/test-balcony-stream-plug.py
+          cd balcony-log
+          # Foculus agent normally proxies through dryl-prod at 127.0.0.1:8788;
+          # with no edge reachable, hit the plug's own LAN address directly.
+          FOCULUS_AGENT_URL="${CAFE_PLUG_LAN_URL:-http://192.168.178.43:8788}" \
+            BALCONY_CAFE_STILL_DOWN=1 python3 scripts/lib/balcony_stream_plug.py || \
+            echo "plug cycle failed with no edge and no direct plug route — needs physical check"
+          echo "Fleet is down: dryl-prod has no LAN presence. This requires physical inspection (power/network) — no remote recovery path exists while the host itself is absent from the LAN."
+          exit 1
+
       - name: Test and install cafe recovery scripts
-        if: env.BALCONY_RECOVERY_NEEDED == '1'
+        if: env.BALCONY_RECOVERY_NEEDED == '1' && env.BALCONY_NO_EDGE != '1'
         run: |
           set -euo pipefail
           python3 balcony-log/scripts/test-balcony-stream-plug.py
@@ -76,7 +82,7 @@ jobs:
           '
 
       - name: Nudge cafe camera, live-reset, and restart if still stuck
-        if: env.BALCONY_RECOVERY_NEEDED == '1'
+        if: env.BALCONY_RECOVERY_NEEDED == '1' && env.BALCONY_NO_EDGE != '1'
         run: |
           ssh -o BatchMode=yes -o ConnectTimeout=8 pi@$BALCONY_EDGE '
             set -euo pipefail

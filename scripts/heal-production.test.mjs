@@ -22,15 +22,28 @@ test("heal installs tested recovery scripts and forces cafe power on", () => {
   assert.doesNotMatch(workflow, /power=false/);
 });
 
-test("heal restores the rollback edge and fails closed on stream health", () => {
+test("heal fails closed on stream health and never touches the kiosk Pi", () => {
   assert.match(workflow, /cron: "\*\/5 \* \* \* \*"/);
   assert.match(workflow, /BALCONY_EDGE/);
   assert.match(workflow, /BALCONY_RECOVERY_NEEDED/);
-  assert.match(workflow, /if: env\.BALCONY_RECOVERY_NEEDED == '1'/);
-  assert.match(workflow, /192\.168\.178\.74/);
-  assert.match(workflow, /StrictHostKeyChecking=accept-new/);
-  assert.match(workflow, /service\.kiosk-disabled/);
-  assert.match(workflow, /systemctl is-active nginx dryl-auth balcony-log/);
+  assert.match(workflow, /BALCONY_NO_EDGE/);
+  assert.match(workflow, /if: env\.BALCONY_RECOVERY_NEEDED == '1' && env\.BALCONY_NO_EDGE != '1'/);
   assert.match(workflow, /Camera\/remux recovery postcondition failed/);
   assert.match(workflow, /exit 1/);
+  // The kiosk Pi (magicmirror, 192.168.178.74) is a physical living-room
+  // display. It must never be started as a production edge again — no
+  // systemctl start of dryl-auth/balcony-log/cloudflared-balcony on it.
+  assert.doesNotMatch(workflow, /edge=192\.168\.178\.74/);
+  assert.doesNotMatch(workflow, /service\.kiosk-disabled/);
+  assert.doesNotMatch(
+    workflow,
+    /sudo systemctl start nginx dryl-auth balcony-log/,
+  );
+});
+
+test("heal reports physical-check-needed when no edge and no direct plug route work", () => {
+  assert.match(workflow, /Cafe plug cycle with no production edge reachable/);
+  assert.match(workflow, /if: env\.BALCONY_NO_EDGE == '1'/);
+  assert.match(workflow, /needs physical check/);
+  assert.match(workflow, /no LAN presence/);
 });
