@@ -36,6 +36,8 @@ assert.match(delivery, /Classify static UI vs remux restart/);
 assert.match(delivery, /resolve-delivery-layer\.mjs/);
 assert.match(delivery, /skip remux-warmup/);
 assert.match(delivery, /errors-probe-balcony-watchable\.mjs/);
+assert.match(delivery, /watchable warmup/);
+assert.match(delivery, /sleep 15/);
 assert.match(delivery, /STAGING_FPS_RESULT_JSON=/);
 assert.match(delivery, /npm run verify:log-layout/);
 assert.doesNotMatch(delivery, /schemaVersion":1,"commitSha"/);

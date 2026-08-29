@@ -363,7 +363,15 @@ jobs:
         working-directory: balcony-log
         env:
           BALCONY_PUBLIC_URL: "https://balcony.dryl.io"
-        run: node ../directory/scripts/errors/errors-probe-balcony-watchable.mjs
+        run: |
+          for attempt in 1 2 3 4 5 6 7 8; do
+            if node ../directory/scripts/errors/errors-probe-balcony-watchable.mjs; then
+              exit 0
+            fi
+            echo "watchable warmup ${attempt}/8 — remux may still be seating after activate"
+            sleep 15
+          done
+          exit 1
 
       - name: Public /watch screen FPS after production activate
         working-directory: balcony-log
