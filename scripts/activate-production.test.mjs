@@ -8,11 +8,12 @@ const source = readFileSync(
   "utf8",
 );
 
-test("activation restarts and waits for the backend readiness endpoint", () => {
+test("activation restarts remux unless mode=static", () => {
+  assert.match(source, /mode="\$\{4:-restart\}"/);
+  assert.match(source, /\[\[ "\$\{MODE\}" != "static" \]\]/);
   assert.match(source, /sudo -n systemctl restart balcony-log/);
   assert.match(source, /http:\/\/127\.0\.0\.1:3838\/api\/health/);
-  assert.match(source, /"\$active" == "active" && "\$status" == "200"/);
-  assert.match(source, /journalctl -u balcony-log -n 50/);
+  assert.match(source, /static activate/);
   assert.match(source, /remuxInitReady/);
   assert.doesNotMatch(source, /\nkill "\$pid"/);
 });

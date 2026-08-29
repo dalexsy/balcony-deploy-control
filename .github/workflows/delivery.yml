@@ -2,6 +2,15 @@ name: unattended-balcony-delivery
 
 on:
   workflow_dispatch:
+    inputs:
+      layer:
+        description: "auto = classify vs prod SHA (static = copy UI, no remux bounce); restart = always bounce remux + soak"
+        type: choice
+        options:
+          - auto
+          - static
+          - restart
+        default: auto
 
 permissions:
   actions: read
@@ -122,6 +131,8 @@ jobs:
   staging:
     needs: build
     runs-on: [self-hosted, staging, pi4, control]
+    outputs:
+      delivery-layer: ${{ steps.layer.outputs.layer }}
     env:
       DRYL_PASS: ${{ secrets.DRYL_PASS }}
     steps:
@@ -133,6 +144,7 @@ jobs:
           path: balcony-log
           ssh-key: ${{ secrets.BALCONY_LOG_READ_KEY }}
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Checkout directory read-only
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
@@ -173,6 +185,16 @@ jobs:
           persist-credentials: false
           path: control
 
+      - name: Classify static UI vs remux restart
+        id: layer
+        run: |
+          set -euo pipefail
+          node control/scripts/resolve-delivery-layer.mjs \
+            --input "${{ github.event.inputs.layer || 'auto' }}" \
+            --repo balcony-log \
+            --head-sha "${{ needs.build.outputs.commit-sha }}" \
+            --prod-host "${PROD_HOST:-192.168.178.79}"
+
       - name: Activate exact candidate on staging
         run: |
           set -euo pipefail
@@ -181,7 +203,8 @@ jobs:
             "artifact/${{ needs.build.outputs.artifact-file }}" \
             "${{ needs.build.outputs.artifact-digest }}" \
             "${{ needs.build.outputs.commit-sha }}" \
-            "${{ needs.build.outputs.watch-asset-version }}"
+            "${{ needs.build.outputs.watch-asset-version }}" \
+            "${{ steps.layer.outputs.layer }}"
 
       - name: Install test tooling without lifecycle scripts
         working-directory: balcony-log
@@ -210,8 +233,12 @@ jobs:
           test "${LIVE_VIDEO}" = "1"
           mkdir -p artifacts/staging-stream
           python scripts/assert-cafe-live-h264.py | tee artifacts/staging-stream/cafe-h264.json
-          BALCONY_WARMUP_PUBLIC=1 REMUX_WARMUP_MIN_FRAGS=16 REMUX_WARMUP_MAX_S=90 \
-            python scripts/remux-warmup.py
+          if [ "${{ steps.layer.outputs.layer }}" != "static" ]; then
+            BALCONY_WARMUP_PUBLIC=1 REMUX_WARMUP_MIN_FRAGS=16 REMUX_WARMUP_MAX_S=90 \
+              python scripts/remux-warmup.py
+          else
+            echo "[ok] static layer — skip remux-warmup (Node not bounced)"
+          fi
           # Pi Chromium on the remux host never buffers HLS (playlist 200,
           # readyState 0). ffmpeg decode of origin HLS is the remux-host
           # proof; public CF 10fps stays verify:screen-fps on balcony.dryl.io.
@@ -298,7 +325,8 @@ jobs:
           scripts/activate-production.sh \
             "artifact/${{ needs.build.outputs.artifact-file }}" \
             "${{ needs.build.outputs.artifact-digest }}" \
-            "${{ needs.build.outputs.commit-sha }}"
+            "${{ needs.build.outputs.commit-sha }}" \
+            "${{ needs.staging.outputs.delivery-layer }}"
 
   verify-production:
     needs: [build, staging, promote, activate]
@@ -331,6 +359,12 @@ jobs:
         working-directory: balcony-log
         run: npm install --ignore-scripts --legacy-peer-deps --include=dev --no-audit --no-fund
 
+      - name: Origin remux still producing (before SSO screen-fps)
+        working-directory: balcony-log
+        env:
+          BALCONY_PUBLIC_URL: "https://balcony.dryl.io"
+        run: node ../directory/scripts/errors/errors-probe-balcony-watchable.mjs
+
       - name: Public /watch screen FPS after production activate
         working-directory: balcony-log
         env:
@@ -342,6 +376,7 @@ jobs:
         run: npm run verify:screen-fps
 
       - name: Public /watch 90s sit (502/503 fail)
+        if: needs.staging.outputs.delivery-layer != 'static'
         working-directory: balcony-log
         env:
           BALCONY_PUBLIC_URL: "https://balcony.dryl.io"

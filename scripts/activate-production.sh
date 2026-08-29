@@ -4,19 +4,23 @@ set -euo pipefail
 artifact="${1:?artifact tarball}"
 digest="${2:?sha256 digest}"
 sha="${3:?commit sha}"
+mode="${4:-restart}"
 prod="${PROD_HOST:-192.168.178.79}"
 
 echo "${digest}  ${artifact}" | sha256sum -c -
 scp -o BatchMode=yes -o ConnectTimeout=8 \
   "$artifact" "pi@${prod}:/tmp/balcony-activate.tar.gz"
 ssh -o BatchMode=yes -o ConnectTimeout=8 "pi@${prod}" \
-  "DIGEST=${digest} SHA=${sha} bash -s" <<'REMOTE'
+  "DIGEST=${digest} SHA=${sha} MODE=${mode} bash -s" <<'REMOTE'
 set -euo pipefail
 echo "${DIGEST}  /tmp/balcony-activate.tar.gz" | sha256sum -c -
 mkdir -p /home/pi/balcony-log
 tar -C /home/pi/balcony-log -xzf /tmp/balcony-activate.tar.gz
 test "$(python3 -c 'import json; print(json.load(open("/home/pi/balcony-log/build-manifest.json"))["commitSha"])')" = "$SHA"
-sudo -n systemctl restart balcony-log
+
+if [[ "${MODE}" != "static" ]]; then
+  sudo -n systemctl restart balcony-log
+fi
 
 deadline=$((SECONDS + 45))
 while (( SECONDS < deadline )); do
@@ -33,6 +37,24 @@ if [[ "${active:-}" != "active" || "${status:-}" != "200" ]]; then
   systemctl status balcony-log --no-pager >&2 || true
   journalctl -u balcony-log -n 50 --no-pager >&2 || true
   exit 1
+fi
+
+manifest_ok="$(curl -fsS --max-time 2 http://127.0.0.1:3838/api/build-manifest \
+  | python3 -c 'import json,sys,os
+try:
+  d=json.load(sys.stdin)
+  print("1" if d.get("commitSha")==os.environ["SHA"] else "0")
+except Exception:
+  print("0")
+' || echo 0)"
+if [[ "$manifest_ok" != "1" ]]; then
+  echo "[fail] disk build-manifest commitSha != ${SHA}" >&2
+  exit 1
+fi
+
+if [[ "${MODE}" == "static" ]]; then
+  echo "[ok] static activate — files on disk, remux process not bounced"
+  exit 0
 fi
 
 deadline=$((SECONDS + 180))
