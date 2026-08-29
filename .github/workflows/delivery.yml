@@ -210,7 +210,7 @@ jobs:
           test "${LIVE_VIDEO}" = "1"
           mkdir -p artifacts/staging-stream
           python scripts/assert-cafe-live-h264.py | tee artifacts/staging-stream/cafe-h264.json
-          BALCONY_WARMUP_PUBLIC=1 REMUX_WARMUP_MIN_FRAGS=16 REMUX_WARMUP_MAX_S=90 \
+          BALCONY_WARMUP_PUBLIC=1 REMUX_WARMUP_MIN_FRAGS=8 REMUX_WARMUP_MAX_S=90 \
             python scripts/remux-warmup.py
           # Pi Chromium on the remux host never buffers HLS (playlist 200,
           # readyState 0). ffmpeg decode of origin HLS is the remux-host
