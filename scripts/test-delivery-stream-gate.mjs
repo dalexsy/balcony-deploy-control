@@ -32,6 +32,12 @@ assert.match(
 assert.match(delivery, /npm run observe:watch-viewer/);
 assert.match(delivery, /printf '\{"commitSha":"%s","watchAssetVersion":"%s"\}/);
 assert.match(delivery, /activate-staging\.sh/);
+assert.match(delivery, /Classify static UI vs remux restart/);
+assert.match(delivery, /resolve-delivery-layer\.mjs/);
+assert.match(delivery, /skip remux-warmup/);
+assert.match(delivery, /errors-probe-balcony-watchable\.mjs/);
+assert.match(delivery, /watchable warmup/);
+assert.match(delivery, /sleep 15/);
 assert.match(delivery, /STAGING_FPS_RESULT_JSON=/);
 assert.match(delivery, /npm run verify:log-layout/);
 assert.doesNotMatch(delivery, /schemaVersion":1,"commitSha"/);
@@ -43,6 +49,14 @@ assert.match(
 );
 assert.ok(
   productionVerify.indexOf("path: directory") <
+    productionVerify.indexOf("errors-probe-balcony-watchable.mjs"),
+);
+assert.ok(
+  productionVerify.indexOf("errors-probe-balcony-watchable.mjs") <
     productionVerify.indexOf("npm run verify:screen-fps"),
+);
+assert.match(
+  productionVerify,
+  /if: needs\.staging\.outputs\.delivery-layer != 'static'/,
 );
 console.log("[ok] delivery staging audit cannot be a printf fixture");

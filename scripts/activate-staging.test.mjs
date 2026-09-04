@@ -11,6 +11,7 @@ const source = readFileSync(
 test("staging activation extracts the candidate and waits for remux identity", () => {
   assert.match(source, /STAGING_HOSTNAME:-dryl-staging/);
   assert.match(source, /DRYL_ENV=staging/);
+  assert.match(source, /mode="\$\{5:-restart\}"/);
   assert.match(source, /sudo -n systemctl restart balcony-log/);
   assert.match(source, /\/api\/build-manifest/);
   assert.match(source, /remuxInitReady/);
