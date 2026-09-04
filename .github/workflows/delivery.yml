@@ -32,6 +32,11 @@ jobs:
       commit-sha: ${{ steps.meta.outputs.commit_sha }}
       watch-asset-version: ${{ steps.meta.outputs.watch_asset_version }}
     steps:
+      - name: Checkout delivery control (scripts + workflow helpers)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+
       - name: Checkout balcony source read-only
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
@@ -81,7 +86,7 @@ jobs:
 
       - name: Fail-closed dependency audit
         working-directory: balcony-log
-        run: node ../scripts/npm-audit-with-retry.mjs
+        run: node "$GITHUB_WORKSPACE/scripts/npm-audit-with-retry.mjs"
 
       - name: Run source and static policy gates
         working-directory: balcony-log
