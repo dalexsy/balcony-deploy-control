@@ -81,7 +81,7 @@ jobs:
 
       - name: Fail-closed dependency audit
         working-directory: balcony-log
-        run: npm audit --audit-level=high
+        run: node ../scripts/npm-audit-with-retry.mjs
 
       - name: Run source and static policy gates
         working-directory: balcony-log
