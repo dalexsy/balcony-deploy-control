@@ -11,6 +11,7 @@ const delivery = fs.readFileSync(
 );
 
 assert.doesNotMatch(delivery, /printf '\{\"schemaVersion\":1,\"ok\":true/);
+assert.match(delivery, /npm-audit-with-retry\.mjs/);
 assert.match(delivery, /write-staging-stream-audit\.mjs/);
 assert.match(delivery, /collect-staging-stream-evidence\.mjs/);
 assert.match(delivery, /BALCONY_PUBLIC_URL: "http:\/\/balcony\.staging\.dryl\.io"/);
