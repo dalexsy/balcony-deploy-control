@@ -23,7 +23,9 @@ test("heal installs tested recovery scripts and forces cafe power on", () => {
 });
 
 test("heal fails closed on stream health and never touches the kiosk Pi", () => {
-  assert.match(workflow, /cron: "\*\/5 \* \* \* \*"/);
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.doesNotMatch(workflow, /^\s*-?\s*cron\s*:/m);
+  assert.doesNotMatch(workflow, /schedule:/);
   assert.match(workflow, /BALCONY_EDGE/);
   assert.match(workflow, /BALCONY_RECOVERY_NEEDED/);
   assert.match(workflow, /BALCONY_NO_EDGE/);
