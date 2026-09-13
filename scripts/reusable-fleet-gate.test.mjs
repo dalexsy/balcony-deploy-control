@@ -24,6 +24,11 @@ test("caller-repo airgap uses an available ephemeral runner", () => {
   assert.doesNotMatch(stagingJob, /runs-on: \[self-hosted/);
 });
 
+test("hosted airgap runs on pull requests only to spare Actions minutes", () => {
+  const stagingJob = workflow.split("  staging-checklist:")[1];
+  assert.match(stagingJob, /if: github\.event_name == 'pull_request'/);
+});
+
 test("hosted airgap audits caller source without private siblings", () => {
   const stagingJob = workflow.split("  staging-checklist:")[1];
   assert.doesNotMatch(stagingJob, /repository: dalexsy\/(?:directory|dryl)/);
