@@ -127,6 +127,10 @@ jobs:
   staging-checklist:
     name: staging-airgap-${{ inputs.app-name }}
     needs: [semantic-quality, scale-gate]
+    # npm ci on hosted runners burns Actions minutes on every merge push.
+    # Keep the full airgap on pull_request; push keeps commitlint + scale only.
+    # Delivery / self-hosted ship owns the real staging build.
+    if: github.event_name == 'pull_request'
     # Reusable workflows execute in the caller repository. Personal-account
     # runners are repository-scoped, so the staging-control runner cannot pick
     # up app-repo jobs. Hosted runners audit caller-owned source without private
