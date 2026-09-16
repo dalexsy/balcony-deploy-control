@@ -19,6 +19,14 @@ on:
         required: false
         type: string
         default: "."
+      # JSON label array. Default stays hosted. Callers with a repo-scoped
+      # home runner (personal accounts cannot share runners across repos) can
+      # pass e.g. '["self-hosted","Linux","ARM64","household-gate"]'.
+      gate-runs-on:
+        description: JSON runs-on labels for commitlint + scale (caller-scoped)
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
 
 env:
   ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: "false"
@@ -34,7 +42,7 @@ concurrency:
 jobs:
   semantic-quality:
     name: commitlint-${{ inputs.app-name }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.gate-runs-on) }}
     steps:
       - name: Checkout app source read-only
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
@@ -70,7 +78,7 @@ jobs:
 
   scale-gate:
     name: scale-200-500-${{ inputs.app-name }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.gate-runs-on) }}
     steps:
       - name: Checkout app source read-only
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
