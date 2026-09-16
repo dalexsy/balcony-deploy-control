@@ -24,6 +24,17 @@ test("caller-repo airgap uses an available ephemeral runner", () => {
   assert.doesNotMatch(stagingJob, /runs-on: \[self-hosted/);
 });
 
+test("commitlint and scale accept a caller-scoped gate-runs-on JSON input", () => {
+  assert.match(workflow, /gate-runs-on:/);
+  assert.match(workflow, /default: '\["ubuntu-latest"\]'/);
+  assert.equal(
+    workflow.match(/runs-on: \$\{\{ fromJSON\(inputs\.gate-runs-on\) \}\}/g)?.length,
+    2,
+  );
+  const stagingJob = workflow.split("  staging-checklist:")[1];
+  assert.doesNotMatch(stagingJob, /fromJSON\(inputs\.gate-runs-on\)/);
+});
+
 test("hosted airgap runs on pull requests only to spare Actions minutes", () => {
   const stagingJob = workflow.split("  staging-checklist:")[1];
   assert.match(stagingJob, /if: github\.event_name == 'pull_request'/);
