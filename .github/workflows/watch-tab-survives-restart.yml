@@ -1,0 +1,71 @@
+name: watch-tab-survives-restart
+
+# PREVENT: probe:watch always opens a fresh page, so it can never catch an
+# already-open tab freezing after a production remux restart (the class
+# that left both / and /watch stuck on 2026-09-24). This keeps one tab open
+# across a real reset on a schedule — fleet automation, not Daryl reporting.
+# OWNER: this schedule. PROVE: the job fails and posts to the fleet inbox
+# when an open tab does not repaint after a reset (see
+# balcony-log/scripts/verify-watch-tab-survives-restart.mjs).
+
+on:
+  schedule:
+    - cron: "*/20 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: balcony-watch-tab-survives-restart
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout balcony source read-only
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          repository: dalexsy/balcony-log
+          ref: main
+          path: balcony-log
+          ssh-key: ${{ secrets.BALCONY_LOG_READ_KEY }}
+          persist-credentials: false
+
+      - name: Checkout directory read-only for verify credentials
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          repository: dalexsy/directory
+          ref: main
+          path: directory
+          ssh-key: ${{ secrets.DIRECTORY_READ_KEY }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: balcony-log/package-lock.json
+
+      - name: Ensure browser dependency
+        run: |
+          if ! command -v chromium >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq chromium
+          fi
+          chromium --version
+
+      - name: Install verify tooling
+        working-directory: balcony-log
+        run: npm install --ignore-scripts --legacy-peer-deps --include=dev --no-audit --no-fund
+
+      - name: Open tab must survive a production remux restart
+        working-directory: balcony-log
+        env:
+          DRYL_PASS: ${{ secrets.DRYL_PASS }}
+          BALCONY_PUBLIC_URL: "https://balcony.dryl.io"
+          # Fleet Directory is only reachable over the internet at this host —
+          # never the PC (localhost:3905) or the LAN-only .80:3905 address.
+          DIRECTORY_API_URL: "http://directory.staging.dryl.io"
+        run: npm run verify:watch-tab-survives-restart
