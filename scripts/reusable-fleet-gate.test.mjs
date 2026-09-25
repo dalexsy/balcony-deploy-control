@@ -24,6 +24,15 @@ test("caller-repo airgap uses an available ephemeral runner", () => {
   assert.doesNotMatch(stagingJob, /runs-on: \[self-hosted/);
 });
 
+test("commitlint installs outside the app tree", () => {
+  assert.match(workflow, /npm install --prefix "\$TOOLS"/);
+  assert.match(workflow, /\$TOOLS\/node_modules\/\.bin\/commitlint/);
+  assert.doesNotMatch(
+    workflow.split("  scale-gate:")[0],
+    /npm install --ignore-scripts --no-audit --no-fund --legacy-peer-deps \\\s*\n\s*@commitlint/,
+  );
+});
+
 test("commitlint and scale accept a caller-scoped gate-runs-on JSON input", () => {
   assert.match(workflow, /gate-runs-on:/);
   assert.match(workflow, /default: '\["ubuntu-latest"\]'/);
