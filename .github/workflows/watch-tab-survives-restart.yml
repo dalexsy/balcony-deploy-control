@@ -2,15 +2,14 @@ name: watch-tab-survives-restart
 
 # PREVENT: probe:watch always opens a fresh page, so it can never catch an
 # already-open tab freezing after a production remux restart (the class
-# that left both / and /watch stuck on 2026-09-24). This keeps one tab open
-# across a real reset on a schedule — fleet automation, not Daryl reporting.
-# OWNER: this schedule. PROVE: the job fails and posts to the fleet inbox
-# when an open tab does not repaint after a reset (see
-# balcony-log/scripts/verify-watch-tab-survives-restart.mjs).
+# that left both / and /watch stuck on 2026-09-24). Manual dispatch only —
+# the */20 hosted schedule burned paid Actions minutes while failing every
+# run (GitHub-hosted cannot reach the live stream the way home can).
+# OWNER: desk, after the painted-freeze path is green on a home runner.
+# PROVE: balcony-log/scripts/verify-watch-tab-survives-restart.mjs fails
+# closed when an open tab does not repaint after a reset.
 
 on:
-  schedule:
-    - cron: "*/20 * * * *"
   workflow_dispatch:
 
 permissions:
