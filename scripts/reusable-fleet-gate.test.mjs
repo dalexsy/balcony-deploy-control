@@ -26,7 +26,8 @@ test("caller-repo airgap uses an available ephemeral runner", () => {
 
 test("commitlint installs outside the app tree", () => {
   assert.match(workflow, /npm install --prefix "\$TOOLS"/);
-  assert.match(workflow, /\$TOOLS\/node_modules\/\.bin\/commitlint/);
+  assert.match(workflow, /NODE_PATH="\$TOOLS\/node_modules"/);
+  assert.match(workflow, /\$TOOLS\/commitlint.config.cjs/);
   assert.doesNotMatch(
     workflow.split("  scale-gate:")[0],
     /npm install --ignore-scripts --no-audit --no-fund --legacy-peer-deps \\\s*\n\s*@commitlint/,
