@@ -35,8 +35,10 @@ env:
 permissions:
   contents: read
 
+# One group per PR (or per ref for push runs). A shared per-app group made every new
+# PR run cancel the in-progress run of a different PR, so merges landed on cancelled checks.
 concurrency:
-  group: fleet-gate-${{ inputs.app-name }}
+  group: fleet-gate-${{ inputs.app-name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
