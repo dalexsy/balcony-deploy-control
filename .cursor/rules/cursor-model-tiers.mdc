@@ -1,0 +1,9 @@
+---
+description: MANDATORY — canonical Cursor model and token discipline
+alwaysApply: true
+---
+
+# Cursor model tiers — pointer only
+
+Use the Read tool on `Repos/speculation/.cursor/rules/cursor-model-tiers.mdc` and follow it.
+Do not edit this generated pointer. Policy changes belong only in `Repos/speculation/`.

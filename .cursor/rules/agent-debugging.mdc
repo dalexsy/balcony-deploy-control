@@ -1,0 +1,29 @@
+---
+description: Read compact debugging.md; never bloat it into a session log
+alwaysApply: true
+---
+
+# Repo debugging notes (budget law)
+
+Before debugging or redeploying, read **`.cursor/rules/debugging.md`** if it exists.
+
+## Hard budget (fleet)
+
+| Limit | Value |
+|-------|------:|
+| `debugging.md` lines | **≤ 200** |
+| Failed experiment bullets | **≤ 20**, one line each |
+
+- **Symptom tables** — actionable fix / do-not columns.
+- **Failed experiments** — date + what not to repeat (one line). No chat paste.
+- **Over budget:** move history to `.cursor/rules/debugging-archive.md` (not always-read). Then shrink primary file.
+- **Never** use debugging.md as a session diary, deploy changelog, or ticket dump.
+- Fleet check: `cd directory && npm run check:debugging-notes`
+
+## After a failed attempt
+
+Append **one bullet** under Failed experiments. If already at 20 bullets, archive the oldest first.
+
+## Ship
+
+Deploy log success is not done — production verify + Read PNGs when UI changed. See ecosystem-health + agent-verification.

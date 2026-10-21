@@ -1,0 +1,11 @@
+---
+description: MANDATORY FIRST READ — canonical core guardrails
+alwaysApply: true
+---
+
+# Core guardrails — pointer only
+
+Before code, deploy, master spec, or repo debugging notes, use the Read tool on the full canonical file:
+`Repos/speculation/core-guardrails.md`.
+
+Do not edit this generated pointer. Policy changes belong only in `Repos/speculation/`.

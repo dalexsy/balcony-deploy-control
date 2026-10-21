@@ -53,7 +53,30 @@ if [[ "$manifest_ok" != "1" ]]; then
 fi
 
 if [[ "${MODE}" == "static" ]]; then
-  echo "[ok] static activate — files on disk, remux process not bounced"
+  disk_asset="$(python3 -c 'import json; print(json.load(open("/home/pi/balcony-log/build-manifest.json")).get("watchAssetVersion",""))')"
+  live_asset="$(curl -fsS --max-time 2 http://127.0.0.1:3838/api/health \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin).get("watchAssetVersion",""))' || true)"
+  if [[ -n "$disk_asset" && "$disk_asset" != "$live_asset" ]]; then
+    echo "[info] static activate — watchAssetVersion stale in process; restarting balcony-log"
+    sudo -n systemctl restart balcony-log
+    deadline=$((SECONDS + 45))
+    while (( SECONDS < deadline )); do
+      active="$(systemctl is-active balcony-log 2>/dev/null || true)"
+      status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+        --max-time 2 http://127.0.0.1:3838/api/health || true)"
+      if [[ "$active" == "active" && "$status" == "200" ]]; then
+        break
+      fi
+      sleep 1
+    done
+    live_asset="$(curl -fsS --max-time 2 http://127.0.0.1:3838/api/health \
+      | python3 -c 'import json,sys; print(json.load(sys.stdin).get("watchAssetVersion",""))' || true)"
+    if [[ "$disk_asset" != "$live_asset" ]]; then
+      echo "[fail] watchAssetVersion still stale after static restart (disk=${disk_asset} live=${live_asset})" >&2
+      exit 1
+    fi
+  fi
+  echo "[ok] static activate — files on disk${live_asset:+, watch stamp ${live_asset}}"
   exit 0
 fi
 
