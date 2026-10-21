@@ -1,0 +1,9 @@
+---
+description: MANDATORY — canonical Cursor Cloud fleet environment
+alwaysApply: true
+---
+
+# Cursor Cloud environment — pointer only
+
+Use the Read tool on `Repos/speculation/.cursor/rules/cursor-cloud-lean-env.mdc` and follow it.
+Do not edit this generated pointer. Policy changes belong only in `Repos/speculation/`.
