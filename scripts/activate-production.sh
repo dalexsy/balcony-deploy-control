@@ -7,6 +7,23 @@ sha="${3:?commit sha}"
 mode="${4:-restart}"
 prod="${PROD_HOST:-192.168.178.79}"
 
+run_post_activate_ship_verify() {
+  if [[ "${mode}" == "static" ]]; then
+    echo "[info] static activate — shipVerify skipped (OIDC restart path only)"
+    return 0
+  fi
+  echo "[activate] post-activate manifest shipVerify (OIDC fail-closed)"
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  bash "${script_dir}/post-activate-ship-verify.sh"
+}
+
+if [[ "${DRYL_ACTIVATE_SKIP_REMOTE:-}" == "1" ]]; then
+  echo "[test] DRYL_ACTIVATE_SKIP_REMOTE=1 — skipping Pi activate; running shipVerify hook only"
+  run_post_activate_ship_verify
+  exit 0
+fi
+
 echo "${digest}  ${artifact}" | sha256sum -c -
 scp -o BatchMode=yes -o ConnectTimeout=8 \
   "$artifact" "pi@${prod}:/tmp/balcony-activate.tar.gz"
@@ -104,3 +121,5 @@ systemctl status balcony-log --no-pager >&2 || true
 journalctl -u balcony-log -n 50 --no-pager >&2 || true
 exit 1
 REMOTE
+
+run_post_activate_ship_verify
