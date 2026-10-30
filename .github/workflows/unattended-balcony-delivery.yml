@@ -66,16 +66,25 @@ jobs:
           done
           (cd ui && npm ci --ignore-scripts --legacy-peer-deps --include=dev && npx ng build @dryl/ui)
 
+      - name: Checkout directory read-only (fleet-ng-build-gate)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          repository: dalexsy/directory
+          ref: main
+          path: directory
+          ssh-key: ${{ secrets.DIRECTORY_READ_KEY }}
+          persist-credentials: false
+
       - name: Install balcony dependencies without lifecycle scripts
         working-directory: balcony-log
         run: npm install --ignore-scripts --legacy-peer-deps --include=dev --no-audit --no-fund
 
-      - name: Build once
+      - name: Build Angular dist (watch static ships from git at this SHA)
         working-directory: balcony-log
         run: |
-          npm run build:watch-css
-          BALCONY_SKIP_WATCH_CSS=1 npm run build
-          npm run verify:dist
+          set -euo pipefail
+          go run -C ../directory/tools/fleet-ng-build-gate . build --configuration production
+          test -d dist/balcony-log/browser
 
       - name: Package content-addressed artifact
         id: meta
