@@ -24,4 +24,4 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          gh pr merge "$PR" --repo dalexsy/balcony-deploy-control --merge --admin
+          gh pr merge "$PR" --repo dalexsy/balcony-deploy-control --rebase
