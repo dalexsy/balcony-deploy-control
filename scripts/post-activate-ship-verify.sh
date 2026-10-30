@@ -1,14 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # Run on the deploy runner after activate-production.sh succeeds (OIDC path).
-root="${REPOS_ROOT:-${HOME}/Repos}"
-if [[ ! -d "${root}/balcony-log" ]]; then
-  if [[ -n "${GITHUB_WORKSPACE:-}" && -d "${GITHUB_WORKSPACE}/balcony-log" ]]; then
-    root="${GITHUB_WORKSPACE}"
-  else
-    root="$(cd "$(dirname "$0")/../.." && pwd)"
-  fi
-fi
+
+repos_root_has_ship_verify_siblings() {
+  local candidate="$1"
+  [[ -n "$candidate" ]] || return 1
+  [[ -f "${candidate}/balcony-log/scripts/run-manifest-ship-verify.py" ]] \
+    && [[ -f "${candidate}/directory/scripts/pi_dryl_common.py" ]]
+}
+
+resolve_repos_root() {
+  local candidate
+  for candidate in \
+    "${REPOS_ROOT:-}" \
+    "${GITHUB_WORKSPACE:-}" \
+    "$(cd "$(dirname "$0")/../.." && pwd)" \
+    "${HOME}/Repos"; do
+    if repos_root_has_ship_verify_siblings "$candidate"; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  echo "[fail] shipVerify REPOS_ROOT: need balcony-log + directory siblings (set REPOS_ROOT or check out both under GITHUB_WORKSPACE)" >&2
+  return 1
+}
+
+root="$(resolve_repos_root)"
+export REPOS_ROOT="$root"
 py=(python3)
 if ! command -v python3 >/dev/null 2>&1; then
   if command -v py >/dev/null 2>&1; then

@@ -21,6 +21,8 @@ jobs:
           set -euo pipefail
           grep -q 'run_post_activate_ship_verify' scripts/activate-production.sh
           grep -q 'post-activate-ship-verify.sh' scripts/activate-production.sh
+          grep -q 'resolve_repos_root' scripts/post-activate-ship-verify.sh
+          grep -q 'directory/scripts/pi_dryl_common.py' scripts/post-activate-ship-verify.sh
 
   fleet-gate:
     needs: [activate-shipverify-structure]
