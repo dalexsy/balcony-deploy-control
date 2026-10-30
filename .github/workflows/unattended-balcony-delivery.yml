@@ -1,0 +1,189 @@
+name: unattended-balcony-delivery
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: balcony-log git ref (branch or full SHA)
+        type: string
+        default: main
+      layer:
+        description: "auto = static UI when prod SHA matches; restart = remux bounce + shipVerify"
+        type: choice
+        options:
+          - auto
+          - static
+          - restart
+        default: auto
+
+permissions:
+  contents: read
+
+concurrency:
+  group: balcony-zero-trust-delivery
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      artifact-file: ${{ steps.meta.outputs.artifact_file }}
+      artifact-digest: ${{ steps.meta.outputs.artifact_digest }}
+      commit-sha: ${{ steps.meta.outputs.commit_sha }}
+      watch-asset-version: ${{ steps.meta.outputs.watch_asset_version }}
+    steps:
+      - name: Checkout balcony source read-only
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          repository: dalexsy/balcony-log
+          ref: ${{ github.event.inputs.ref || 'main' }}
+          path: balcony-log
+          ssh-key: ${{ secrets.BALCONY_LOG_READ_KEY }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Checkout dryl packages read-only
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          repository: dalexsy/dryl
+          ref: main
+          path: dryl
+          ssh-key: ${{ secrets.DRYL_READ_KEY }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: balcony-log/package-lock.json
+
+      - name: Build exact @dryl packages
+        working-directory: dryl
+        run: |
+          set -euo pipefail
+          for pkg in auth-client app-data storage; do
+            (cd "$pkg" && npm ci --ignore-scripts --legacy-peer-deps --include=dev && ./node_modules/.bin/tsc -p tsconfig.json)
+          done
+          (cd ui && npm ci --ignore-scripts --legacy-peer-deps && npm run build:lib)
+
+      - name: Install balcony dependencies without lifecycle scripts
+        working-directory: balcony-log
+        run: npm install --ignore-scripts --legacy-peer-deps --include=dev --no-audit --no-fund
+
+      - name: Run source and static policy gates
+        working-directory: balcony-log
+        run: |
+          npm run test:zero-trust
+          npm run lint:ui
+          npm run verify:bundles-compiled
+          npm run lint:watch-static
+
+      - name: Build once
+        working-directory: balcony-log
+        run: |
+          npm run build:watch-css
+          BALCONY_SKIP_WATCH_CSS=1 npm run build
+          npm run verify:dist
+
+      - name: Package content-addressed artifact
+        id: meta
+        run: |
+          set -euo pipefail
+          sha="$(git -C balcony-log rev-parse HEAD)"
+          asset="$(sed -n 's/.*WATCH_ASSET_VERSION = "\([^"]*\)".*/\1/p' \
+            balcony-log/src/server/watch/watch-asset-version.ts)"
+          test -n "$asset"
+          file="balcony-${sha}.tar.gz"
+          printf '{"commitSha":"%s","watchAssetVersion":"%s"}\n' \
+            "$sha" "$asset" > balcony-log/build-manifest.json
+          tar -C balcony-log -czf "$file" \
+            build-manifest.json dist/balcony-log/browser src/server server.ts \
+            scripts/pi-package.json scripts/pi-watch-probe.mjs \
+            scripts/lib/balcony_stream_health.py
+          digest="$(sha256sum "$file" | cut -d' ' -f1)"
+          echo "artifact_file=${file}" >> "$GITHUB_OUTPUT"
+          echo "artifact_digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "commit_sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "watch_asset_version=${asset}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload exact build artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: balcony-build-${{ steps.meta.outputs.commit_sha }}
+          path: ${{ steps.meta.outputs.artifact_file }}
+          if-no-files-found: error
+          retention-days: 30
+
+  activate:
+    needs: build
+    runs-on: [self-hosted, staging, pi4, control]
+    env:
+      REPOS_ROOT: ${{ github.workspace }}
+    steps:
+      - name: Checkout control plane scripts
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+          path: control
+
+      - name: Checkout balcony exact SHA read-only
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          repository: dalexsy/balcony-log
+          ref: ${{ needs.build.outputs.commit-sha }}
+          path: balcony-log
+          ssh-key: ${{ secrets.BALCONY_LOG_READ_KEY }}
+          persist-credentials: false
+
+      - name: Checkout directory read-only (manifest shipVerify)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          repository: dalexsy/directory
+          ref: main
+          path: directory
+          ssh-key: ${{ secrets.DIRECTORY_READ_KEY }}
+          persist-credentials: false
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: balcony-build-${{ needs.build.outputs.commit-sha }}
+          path: artifact
+
+      - name: Resolve activate mode
+        id: mode
+        run: |
+          set -euo pipefail
+          layer="${{ github.event.inputs.layer || 'auto' }}"
+          if [ "$layer" = "auto" ]; then
+            prod_sha="$(ssh -o BatchMode=yes -o ConnectTimeout=8 pi@192.168.178.79 \
+              'curl -fsS --max-time 3 http://127.0.0.1:3838/api/build-manifest' \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin).get("commitSha",""))' || true)"
+            if [ "$prod_sha" = "${{ needs.build.outputs.commit-sha }}" ]; then
+              layer=static
+            else
+              layer=restart
+            fi
+          fi
+          echo "mode=${layer}" >> "$GITHUB_OUTPUT"
+
+      - name: Activate attested artifact on production
+        id: activate
+        run: |
+          set -euo pipefail
+          file="artifact/${{ needs.build.outputs.artifact-file }}"
+          echo "${{ needs.build.outputs.artifact-digest }}  ${file}" | sha256sum -c -
+          chmod +x control/scripts/activate-production.sh
+          control/scripts/activate-production.sh \
+            "$file" \
+            "${{ needs.build.outputs.artifact-digest }}" \
+            "${{ needs.build.outputs.commit-sha }}" \
+            "${{ steps.mode.outputs.mode }}" \
+            2>&1 | tee /tmp/balcony-activate.log
+
+      - name: Fail-closed post-activate shipVerify log lines
+        if: steps.mode.outputs.mode != 'static'
+        run: |
+          set -euo pipefail
+          grep -q '\[activate\] post-activate manifest shipVerify' /tmp/balcony-activate.log
+          grep -q '\[shipVerify\] ok balcony' /tmp/balcony-activate.log
+          echo "[ok] post-activate manifest shipVerify passed"

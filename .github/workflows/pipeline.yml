@@ -10,7 +10,20 @@ permissions:
   contents: read
 
 jobs:
+  activate-shipverify-structure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+      - name: Structural — activate-production invokes post-activate shipVerify
+        run: |
+          set -euo pipefail
+          grep -q 'run_post_activate_ship_verify' scripts/activate-production.sh
+          grep -q 'post-activate-ship-verify.sh' scripts/activate-production.sh
+
   fleet-gate:
+    needs: [activate-shipverify-structure]
     uses: ./.github/workflows/reusable-fleet-gate.yml
     with:
       app-name: balcony-deploy-control
