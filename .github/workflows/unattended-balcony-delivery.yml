@@ -81,9 +81,11 @@ jobs:
 
       - name: Build Angular dist (watch static ships from git at this SHA)
         working-directory: balcony-log
+        env:
+          INIT_CWD: ${{ github.workspace }}/balcony-log
         run: |
           set -euo pipefail
-          go run ../directory/tools/fleet-ng-build-gate build --configuration production
+          go run -C ../directory/tools/fleet-ng-build-gate . build --configuration production
           test -d dist/balcony-log/browser
 
       - name: Package content-addressed artifact
