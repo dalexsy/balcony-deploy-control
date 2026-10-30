@@ -65,6 +65,9 @@ jobs:
             (cd "$pkg" && npm ci --ignore-scripts --legacy-peer-deps --include=dev && ./node_modules/.bin/tsc -p tsconfig.json)
           done
           (cd ui && npm ci --ignore-scripts --legacy-peer-deps --include=dev && npx ng build @dryl/ui)
+          rm -rf dryl/ui/dist/dryl/ui
+          cp -a dryl/ui/dist/dryl/ui-staging dryl/ui/dist/dryl/ui
+          test -f dryl/ui/dist/dryl/ui/package.json
 
       - name: Checkout directory read-only (fleet-ng-build-gate)
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
