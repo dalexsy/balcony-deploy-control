@@ -39,6 +39,12 @@ if ! command -v python3 >/dev/null 2>&1; then
   fi
 fi
 if ! "${py[@]}" -c "import paramiko" 2>/dev/null; then
-  "${py[@]}" -m pip install --user --quiet paramiko
+  req="${root}/directory/scripts/requirements.txt"
+  echo "[shipVerify] installing Python deps for manifest runner"
+  if [[ -f "$req" ]]; then
+    "${py[@]}" -m pip install --user -q -r "$req"
+  else
+    "${py[@]}" -m pip install --user -q paramiko
+  fi
 fi
 "${py[@]}" "${root}/balcony-log/scripts/run-manifest-ship-verify.py"
