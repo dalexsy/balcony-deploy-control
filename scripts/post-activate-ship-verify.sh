@@ -29,6 +29,19 @@ resolve_repos_root() {
 
 root="$(resolve_repos_root)"
 export REPOS_ROOT="$root"
+
+for envfile in \
+  "${root}/directory/data/local.env" \
+  "${HOME}/Repos/directory/data/local.env"; do
+  if [[ -f "$envfile" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$envfile"
+    set +a
+    break
+  fi
+done
+
 export AGENT_DRYL_USER="${AGENT_DRYL_USER:-agent}"
 export AGENT_DRYL_PASS="${AGENT_DRYL_PASS:-${DRYL_PASS:-}}"
 if [[ -z "${AGENT_DRYL_PASS}" ]]; then
