@@ -183,6 +183,10 @@ jobs:
         working-directory: balcony-log
         run: npm install --ignore-scripts --legacy-peer-deps --include=dev --no-audit --no-fund
 
+      - name: Install Playwright headless shell for verify:screen-fps
+        working-directory: balcony-log
+        run: npx playwright-core install chromium --only-shell
+
       - name: Resolve activate mode
         id: mode
         run: |
