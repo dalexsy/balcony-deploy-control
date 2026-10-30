@@ -64,7 +64,7 @@ jobs:
           for pkg in auth-client app-data storage; do
             (cd "$pkg" && npm ci --ignore-scripts --legacy-peer-deps --include=dev && ./node_modules/.bin/tsc -p tsconfig.json)
           done
-          (cd ui && npm ci --ignore-scripts --legacy-peer-deps && npm run build:lib)
+          (cd ui && npm ci --ignore-scripts --legacy-peer-deps --include=dev && python3 scripts/build_lib.py)
 
       - name: Install balcony dependencies without lifecycle scripts
         working-directory: balcony-log
