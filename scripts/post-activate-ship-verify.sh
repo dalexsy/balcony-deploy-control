@@ -38,20 +38,4 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 1
   fi
 fi
-if ! "${py[@]}" -c "import paramiko" 2>/dev/null; then
-  echo "[shipVerify] installing Python deps for manifest runner"
-  if command -v apt-get >/dev/null 2>&1; then
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3-paramiko
-  else
-    req="${root}/directory/scripts/requirements.txt"
-    if [[ -f "$req" ]] && "${py[@]}" -m pip --version >/dev/null 2>&1; then
-      "${py[@]}" -m pip install --user -q -r "$req"
-    elif "${py[@]}" -m pip --version >/dev/null 2>&1; then
-      "${py[@]}" -m pip install --user -q paramiko
-    else
-      echo "[fail] paramiko required (apt: python3-paramiko or enable pip)" >&2
-      exit 1
-    fi
-  fi
-fi
 "${py[@]}" "${root}/balcony-log/scripts/run-manifest-ship-verify.py"
