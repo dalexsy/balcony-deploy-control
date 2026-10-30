@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # Run on the deploy runner after activate-production.sh succeeds (OIDC path).
+# Native Go shipVerify — no python3 / paramiko on the runner success path.
 
 repos_root_has_ship_verify_siblings() {
   local candidate="$1"
   [[ -n "$candidate" ]] || return 1
-  [[ -f "${candidate}/balcony-log/scripts/run-manifest-ship-verify.py" ]] \
-    && [[ -f "${candidate}/directory/scripts/pi_dryl_common.py" ]]
+  [[ -f "${candidate}/directory/scripts/dryl-static-sites.json" ]] \
+    && [[ -f "${candidate}/directory/tools/fleetctl/main.go" ]] \
+    && [[ -f "${candidate}/balcony-log/package.json" ]]
 }
 
 resolve_repos_root() {
@@ -27,15 +29,8 @@ resolve_repos_root() {
 
 root="$(resolve_repos_root)"
 export REPOS_ROOT="$root"
-py=(python3)
-if ! command -v python3 >/dev/null 2>&1; then
-  if command -v py >/dev/null 2>&1; then
-    py=(py -3)
-  elif command -v python >/dev/null 2>&1; then
-    py=(python)
-  else
-    echo "[fail] python3 required for manifest shipVerify" >&2
-    exit 1
-  fi
+if ! command -v go >/dev/null 2>&1; then
+  echo "[fail] go required for native manifest shipVerify (fleetctl ship-verify)" >&2
+  exit 1
 fi
-"${py[@]}" "${root}/balcony-log/scripts/run-manifest-ship-verify.py"
+go run -C "${root}/directory/tools/fleetctl" . ship-verify balcony --directory "${root}/directory" --repos-root "$root"
