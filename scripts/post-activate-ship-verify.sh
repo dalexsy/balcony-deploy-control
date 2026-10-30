@@ -3,7 +3,11 @@ set -euo pipefail
 # Run on the deploy runner after activate-production.sh succeeds (OIDC path).
 root="${REPOS_ROOT:-${HOME}/Repos}"
 if [[ ! -d "${root}/balcony-log" ]]; then
-  root="$(cd "$(dirname "$0")/../.." && pwd)"
+  if [[ -n "${GITHUB_WORKSPACE:-}" && -d "${GITHUB_WORKSPACE}/balcony-log" ]]; then
+    root="${GITHUB_WORKSPACE}"
+  else
+    root="$(cd "$(dirname "$0")/../.." && pwd)"
+  fi
 fi
 py=(python3)
 if ! command -v python3 >/dev/null 2>&1; then
