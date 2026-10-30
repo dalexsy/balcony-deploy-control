@@ -139,6 +139,8 @@ jobs:
     env:
       REPOS_ROOT: ${{ github.workspace }}
       DRYL_PASS: ${{ secrets.DRYL_PASS }}
+      AGENT_DRYL_USER: ${{ secrets.AGENT_DRYL_USER }}
+      AGENT_DRYL_PASS: ${{ secrets.AGENT_DRYL_PASS }}
     steps:
       - name: Checkout control plane scripts
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
