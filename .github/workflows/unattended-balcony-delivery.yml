@@ -138,6 +138,7 @@ jobs:
     runs-on: [self-hosted, staging, pi4, control]
     env:
       REPOS_ROOT: ${{ github.workspace }}
+      DRYL_PASS: ${{ secrets.DRYL_PASS }}
     steps:
       - name: Checkout control plane scripts
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
@@ -167,6 +168,14 @@ jobs:
         with:
           name: balcony-build-${{ needs.build.outputs.commit-sha }}
           path: artifact
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "24"
+
+      - name: Install balcony verify tooling
+        working-directory: balcony-log
+        run: npm install --ignore-scripts --legacy-peer-deps --include=dev --no-audit --no-fund
 
       - name: Resolve activate mode
         id: mode

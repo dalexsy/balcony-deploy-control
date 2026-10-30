@@ -38,4 +38,7 @@ if ! command -v python3 >/dev/null 2>&1; then
     exit 1
   fi
 fi
+if ! "${py[@]}" -c "import paramiko" 2>/dev/null; then
+  "${py[@]}" -m pip install --user --quiet paramiko
+fi
 "${py[@]}" "${root}/balcony-log/scripts/run-manifest-ship-verify.py"
