@@ -64,22 +64,9 @@ jobs:
           for pkg in auth-client app-data storage; do
             (cd "$pkg" && npm ci --ignore-scripts --legacy-peer-deps --include=dev && ./node_modules/.bin/tsc -p tsconfig.json)
           done
-          (cd ui && npm ci --ignore-scripts --legacy-peer-deps --include=dev && npx ng build @dryl/ui)
-          rm -rf ui/dist/dryl/ui
-          cp -a ui/dist/dryl/ui-staging ui/dist/dryl/ui
-          mkdir -p ui/dist/dryl/ui/src/lib
-          cp -a ui/projects/dryl/ui/src/lib/styles ui/dist/dryl/ui/src/lib/styles
-          node <<'NODE'
-          const fs = require("fs");
-          const pkgPath = "ui/dist/dryl/ui/package.json";
-          const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-          pkg.exports = pkg.exports || {};
-          pkg.exports["./styles"] = { default: "./src/lib/styles/index.scss" };
-          pkg.exports["./styles/layout"] = { default: "./src/lib/styles/_layout.scss" };
-          pkg.sideEffects = ["*.scss", "*.css"];
-          fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
-          NODE
+          (cd ui && npm ci --ignore-scripts --legacy-peer-deps --include=dev && python3 scripts/build_lib.py)
           test -f ui/dist/dryl/ui/package.json
+          test -f ui/dist/dryl/ui/src/lib/styles/index.scss
 
       - name: Checkout directory read-only (fleet-ng-build-gate)
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
@@ -116,7 +103,7 @@ jobs:
             "$sha" "$asset" > balcony-log/build-manifest.json
           tar -C balcony-log -czf "$file" \
             build-manifest.json dist/balcony-log/browser src/server server.ts \
-            scripts/pi-package.json scripts/pi-watch-probe.mjs \
+            scripts/pi-package.json scripts/pi-watch-probe.sh \
             scripts/lib/balcony_stream_health.py
           digest="$(sha256sum "$file" | cut -d' ' -f1)"
           echo "artifact_file=${file}" >> "$GITHUB_OUTPUT"
