@@ -173,6 +173,12 @@ jobs:
         with:
           node-version: "24"
 
+      - name: Set up Go for fleetctl ship-verify
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: directory/tools/fleetctl/go.mod
+          cache: false
+
       - name: Install balcony verify tooling
         working-directory: balcony-log
         run: npm install --ignore-scripts --legacy-peer-deps --include=dev --no-audit --no-fund
