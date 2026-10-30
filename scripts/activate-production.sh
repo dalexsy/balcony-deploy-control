@@ -69,6 +69,13 @@ if [[ "$manifest_ok" != "1" ]]; then
   exit 1
 fi
 
+health_sha="$(curl -fsS --max-time 2 http://127.0.0.1:3838/api/health \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin).get("appBuildVersion",""))' || true)"
+if [[ -z "$health_sha" || "$health_sha" != "$SHA" ]]; then
+  echo "[fail] health appBuildVersion (${health_sha:-missing}) != activate SHA ${SHA}" >&2
+  exit 1
+fi
+
 if [[ "${MODE}" == "static" ]]; then
   disk_asset="$(python3 -c 'import json; print(json.load(open("/home/pi/balcony-log/build-manifest.json")).get("watchAssetVersion",""))')"
   live_asset="$(curl -fsS --max-time 2 http://127.0.0.1:3838/api/health \

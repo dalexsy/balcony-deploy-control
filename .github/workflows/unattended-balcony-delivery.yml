@@ -104,6 +104,17 @@ jobs:
           go run -C ../directory/tools/fleet-ng-build-gate . build --configuration production
           test -d dist/balcony-log/browser
 
+      - name: Stamp dist dryl-build-version.json (health + shipVerify identity)
+        working-directory: balcony-log
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          main="$(basename "$(ls dist/balcony-log/browser/main-*.js | head -1)")"
+          ver="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+          printf '{"app":"balcony","version":"%s","sha":"%s","main":"%s","label":"Balcony live"}\n' \
+            "$ver" "$sha" "$main" > dist/balcony-log/browser/dryl-build-version.json
+          test -s dist/balcony-log/browser/dryl-build-version.json
+
       - name: Package content-addressed artifact
         id: meta
         run: |
