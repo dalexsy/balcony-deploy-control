@@ -29,6 +29,12 @@ resolve_repos_root() {
 
 root="$(resolve_repos_root)"
 export REPOS_ROOT="$root"
+export AGENT_DRYL_USER="${AGENT_DRYL_USER:-agent}"
+export AGENT_DRYL_PASS="${AGENT_DRYL_PASS:-${DRYL_PASS:-}}"
+if [[ -z "${AGENT_DRYL_PASS}" ]]; then
+  echo "[fail] shipVerify needs AGENT_DRYL_PASS or DRYL_PASS in runner env" >&2
+  exit 1
+fi
 if ! command -v go >/dev/null 2>&1; then
   echo "[fail] go required for native manifest shipVerify (fleetctl ship-verify)" >&2
   exit 1
