@@ -16,7 +16,7 @@ concurrency:
 jobs:
   merge:
     if: github.repository == 'dalexsy/balcony-deploy-control'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Merge ready control PR with Actions bypass
         env:

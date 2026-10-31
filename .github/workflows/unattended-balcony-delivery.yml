@@ -25,7 +25,8 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Pin 24.04 until fleet validates ubuntu-26 (actions/runner-images#14748).
+    runs-on: ubuntu-24.04
     outputs:
       artifact-file: ${{ steps.meta.outputs.artifact_file }}
       artifact-digest: ${{ steps.meta.outputs.artifact_digest }}
@@ -94,6 +95,18 @@ jobs:
       - name: Install balcony dependencies without lifecycle scripts
         working-directory: balcony-log
         run: npm install --ignore-scripts --legacy-peer-deps --include=dev --no-audit --no-fund
+
+      - name: Verify built commit matches dispatch ref
+        working-directory: balcony-log
+        run: |
+          set -euo pipefail
+          built="$(git rev-parse HEAD)"
+          ref="${{ github.event.inputs.ref || 'main' }}"
+          if echo "$ref" | grep -Eq '^[0-9a-f]{40}$'; then
+            want="$(git rev-parse "$ref")"
+            test "$built" = "$want"
+          fi
+          echo "built_sha=${built}"
 
       - name: Build Angular dist (watch static ships from git at this SHA)
         working-directory: balcony-log
@@ -205,6 +218,7 @@ jobs:
         run: |
           set -euo pipefail
           layer="${{ github.event.inputs.layer || 'auto' }}"
+          ref="${{ github.event.inputs.ref || 'main' }}"
           if [ "$layer" = "auto" ]; then
             prod_sha="$(ssh -o BatchMode=yes -o ConnectTimeout=8 pi@192.168.178.79 \
               'curl -fsS --max-time 3 http://127.0.0.1:3838/api/build-manifest' \
@@ -215,7 +229,12 @@ jobs:
               layer=restart
             fi
           fi
+          # Pinned SHA deliveries must restart + cold shipVerify (never static-skip).
+          if echo "$ref" | grep -Eq '^[0-9a-f]{40}$'; then
+            layer=restart
+          fi
           echo "mode=${layer}" >> "$GITHUB_OUTPUT"
+          echo "[resolve] ref=${ref} commit=${{ needs.build.outputs.commit-sha }} mode=${layer}"
 
       - name: Activate attested artifact on production
         id: activate
