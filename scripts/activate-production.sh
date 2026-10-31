@@ -104,35 +104,34 @@ if [[ "${MODE}" == "static" ]]; then
   exit 0
 fi
 
-max_frame_age_ms=2500
-min_remux_fps=0.25
 need_consecutive=3
 consecutive_ok=0
 deadline=$((SECONDS + 180))
 while (( SECONDS < deadline )); do
-  sample="$(curl -fsS --max-time 2 http://127.0.0.1:3838/api/health \
+  sample="$(curl -fsS --max-time 2 http://127.0.0.1:3838/api/live/status \
     | python3 -c 'import json,sys
-max_age=int(sys.argv[1])
-min_fps=float(sys.argv[2])
 try:
   d=json.load(sys.stdin)
-  s=d.get("stream") or {}
-  if d.get("ok") is not True: raise ValueError("ok")
-  if s.get("connected") is not True: raise ValueError("connected")
-  if s.get("remuxInitReady") is not True: raise ValueError("remuxInitReady")
-  if d.get("issues"): raise ValueError("issues")
-  age=s.get("frameAgeMs")
-  if age is None or float(age) > max_age: raise ValueError("frameAgeMs")
-  fps=s.get("measuredFps")
-  if fps is None or float(fps) < min_fps: raise ValueError("measuredFps")
+  if d.get("ok") is not True:
+    raise ValueError("ok")
+  video=d.get("video") or {}
+  frags=int(video.get("fragmentsSent") or 0)
+  if frags <= 0:
+    raise ValueError("fragmentsSent")
+  fps=video.get("remuxFps")
+  if fps is None or float(fps) < 0.25:
+    raise ValueError("remuxFps")
+  age=video.get("lastChunkAgeMs")
+  if age is None or float(age) > 24000:
+    raise ValueError("lastChunkAgeMs")
   print("ok")
 except Exception:
   print("wait")
-' "$max_frame_age_ms" "$min_remux_fps" 2>/dev/null || echo wait)"
+' 2>/dev/null || echo wait)"
   if [[ "$sample" == "ok" ]]; then
     consecutive_ok=$((consecutive_ok + 1))
     if [[ "$consecutive_ok" -ge "$need_consecutive" ]]; then
-      echo "[ok] balcony-log active, healthy, remux producing (tier-C loopback gate)"
+      echo "[ok] balcony-log active, healthy, remux producing (tier-C loopback gate — HLS fragments)"
       exit 0
     fi
   else
