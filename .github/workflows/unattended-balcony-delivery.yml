@@ -33,6 +33,23 @@ jobs:
       commit-sha: ${{ steps.meta.outputs.commit_sha }}
       watch-asset-version: ${{ steps.meta.outputs.watch_asset_version }}
     steps:
+      - name: Checkout activation tooling
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          path: control
+          persist-credentials: false
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: control/tools/activation/go.mod
+          cache: false
+
+      - name: Test and build activation checks
+        run: |
+          set -euo pipefail
+          go test -C control/tools/activation ./...
+          go build -C control/tools/activation -o "$RUNNER_TEMP/activation-check" .
+
       - name: Checkout balcony source read-only
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
@@ -70,16 +87,7 @@ jobs:
           cp -a ui/dist/dryl/ui-staging ui/dist/dryl/ui
           mkdir -p ui/dist/dryl/ui/src/lib
           cp -a ui/projects/dryl/ui/src/lib/styles ui/dist/dryl/ui/src/lib/styles
-          node <<'NODE'
-          const fs = require("fs");
-          const pkgPath = "ui/dist/dryl/ui/package.json";
-          const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-          pkg.exports = pkg.exports || {};
-          pkg.exports["./styles"] = { default: "./src/lib/styles/index.scss" };
-          pkg.exports["./styles/layout"] = { default: "./src/lib/styles/_layout.scss" };
-          pkg.sideEffects = ["*.scss", "*.css"];
-          fs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
-          NODE
+          "$RUNNER_TEMP/activation-check" style-package ui/dist/dryl/ui/package.json
           test -f ui/dist/dryl/ui/package.json
           test -f ui/dist/dryl/ui/src/lib/styles/index.scss
 
@@ -98,15 +106,27 @@ jobs:
 
       - name: Verify built commit matches dispatch ref
         working-directory: balcony-log
+        env:
+          BUILD_REF: ${{ github.event.inputs.ref || 'main' }}
         run: |
           set -euo pipefail
           built="$(git rev-parse HEAD)"
-          ref="${{ github.event.inputs.ref || 'main' }}"
+          ref="$BUILD_REF"
           if echo "$ref" | grep -Eq '^[0-9a-f]{40}$'; then
             want="$(git rev-parse "$ref")"
             test "$built" = "$want"
           fi
           echo "built_sha=${built}"
+
+      - name: Check watch source and generated bundles
+        working-directory: balcony-log
+        run: |
+          set -euo pipefail
+          npm run typecheck:watch
+          npm run test:watch-human-presence
+          npm run test:watch-viewer-return
+          npm run test:watch-frame-dedupe
+          npm run lint:watch-static
 
       - name: Build Angular dist (watch static ships from git at this SHA)
         working-directory: balcony-log
@@ -139,10 +159,12 @@ jobs:
           file="balcony-${sha}.tar.gz"
           printf '{"commitSha":"%s","watchAssetVersion":"%s"}\n' \
             "$sha" "$asset" > balcony-log/build-manifest.json
+          mkdir -p balcony-log/tools
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -C control/tools/activation \
+            -o "$GITHUB_WORKSPACE/balcony-log/tools/activation-check" .
           tar -C balcony-log -czf "$file" \
             build-manifest.json dist/balcony-log/browser src/server server.ts \
-            scripts/pi-package.json scripts/pi-watch-probe.sh \
-            scripts/lib/balcony_stream_health.py
+            scripts/pi-package.json tools/activation-check
           digest="$(sha256sum "$file" | cut -d' ' -f1)"
           echo "artifact_file=${file}" >> "$GITHUB_OUTPUT"
           echo "artifact_digest=${digest}" >> "$GITHUB_OUTPUT"
@@ -157,8 +179,29 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  activate:
+  staging:
     needs: build
+    runs-on: [self-hosted, staging, pi4, control]
+    steps:
+      - name: Checkout control plane scripts
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: balcony-build-${{ needs.build.outputs.commit-sha }}
+          path: artifact
+      - name: Activate and verify the candidate on staging
+        run: |
+          set -euo pipefail
+          bash scripts/activate-staging.sh \
+            "artifact/${{ needs.build.outputs.artifact-file }}" \
+            "${{ needs.build.outputs.artifact-digest }}" \
+            "${{ needs.build.outputs.commit-sha }}" \
+            "${{ needs.build.outputs.watch-asset-version }}" restart
+
+  activate:
+    needs: [build, staging]
     runs-on: [self-hosted, staging, pi4, control]
     env:
       REPOS_ROOT: ${{ github.workspace }}
@@ -215,14 +258,18 @@ jobs:
 
       - name: Resolve activate mode
         id: mode
+        env:
+          BUILD_REF: ${{ github.event.inputs.ref || 'main' }}
+          BUILD_LAYER: ${{ github.event.inputs.layer || 'auto' }}
         run: |
           set -euo pipefail
-          layer="${{ github.event.inputs.layer || 'auto' }}"
-          ref="${{ github.event.inputs.ref || 'main' }}"
+          go build -C control/tools/activation -o "$RUNNER_TEMP/activation-check" .
+          layer="$BUILD_LAYER"
+          ref="$BUILD_REF"
           if [ "$layer" = "auto" ]; then
             prod_sha="$(ssh -o BatchMode=yes -o ConnectTimeout=8 pi@192.168.178.79 \
               'curl -fsS --max-time 3 http://127.0.0.1:3838/api/build-manifest' \
-              | python3 -c 'import json,sys; print(json.load(sys.stdin).get("commitSha",""))' || true)"
+              | "$RUNNER_TEMP/activation-check" field commitSha || true)"
             if [ "$prod_sha" = "${{ needs.build.outputs.commit-sha }}" ]; then
               layer=static
             else
@@ -251,7 +298,6 @@ jobs:
             2>&1 | tee /tmp/balcony-activate.log
 
       - name: Fail-closed post-activate shipVerify log lines
-        if: steps.mode.outputs.mode != 'static'
         run: |
           set -euo pipefail
           grep -q '\[activate\] post-activate manifest shipVerify' /tmp/balcony-activate.log

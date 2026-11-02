@@ -8,21 +8,15 @@ mode="${4:-restart}"
 prod="${PROD_HOST:-192.168.178.79}"
 
 run_post_activate_ship_verify() {
-  if [[ "${mode}" == "static" ]]; then
-    echo "[info] static activate — shipVerify skipped (OIDC restart path only)"
-    return 0
-  fi
   echo "[activate] post-activate manifest shipVerify (OIDC fail-closed)"
   local script_dir
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   bash "${script_dir}/post-activate-ship-verify.sh"
 }
 
-if [[ "${DRYL_ACTIVATE_SKIP_REMOTE:-}" == "1" ]]; then
-  echo "[test] DRYL_ACTIVATE_SKIP_REMOTE=1 — skipping Pi activate; running shipVerify hook only"
-  run_post_activate_ship_verify
-  exit 0
-fi
+[[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+[[ "$digest" =~ ^[0-9a-f]{64}$ ]]
+[[ "$mode" == "static" || "$mode" == "restart" ]]
 
 echo "${digest}  ${artifact}" | sha256sum -c -
 scp -o BatchMode=yes -o ConnectTimeout=8 \
@@ -33,7 +27,9 @@ set -euo pipefail
 echo "${DIGEST}  /tmp/balcony-activate.tar.gz" | sha256sum -c -
 mkdir -p /home/pi/balcony-log
 tar -C /home/pi/balcony-log -xzf /tmp/balcony-activate.tar.gz
-test "$(python3 -c 'import json; print(json.load(open("/home/pi/balcony-log/build-manifest.json"))["commitSha"])')" = "$SHA"
+check=/home/pi/balcony-log/tools/activation-check
+test -x "$check"
+test "$("$check" field commitSha /home/pi/balcony-log/build-manifest.json)" = "$SHA"
 
 if [[ "${MODE}" != "static" ]]; then
   sudo -n systemctl restart balcony-log
@@ -56,30 +52,24 @@ if [[ "${active:-}" != "active" || "${status:-}" != "200" ]]; then
   exit 1
 fi
 
-manifest_ok="$(curl -fsS --max-time 2 http://127.0.0.1:3838/api/build-manifest \
-  | python3 -c 'import json,sys,os
-try:
-  d=json.load(sys.stdin)
-  print("1" if d.get("commitSha")==os.environ["SHA"] else "0")
-except Exception:
-  print("0")
-' || echo 0)"
-if [[ "$manifest_ok" != "1" ]]; then
+manifest_sha="$(curl -fsS --max-time 2 http://127.0.0.1:3838/api/build-manifest \
+  | "$check" field commitSha || true)"
+if [[ "$manifest_sha" != "$SHA" ]]; then
   echo "[fail] disk build-manifest commitSha != ${SHA}" >&2
   exit 1
 fi
 
 health_sha="$(curl -fsS --max-time 2 http://127.0.0.1:3838/api/health \
-  | python3 -c 'import json,sys; print(json.load(sys.stdin).get("appBuildVersion",""))' || true)"
+  | "$check" field appBuildVersion || true)"
 if [[ -z "$health_sha" || "$health_sha" != "$SHA" ]]; then
   echo "[fail] health appBuildVersion (${health_sha:-missing}) != activate SHA ${SHA}" >&2
   exit 1
 fi
 
 if [[ "${MODE}" == "static" ]]; then
-  disk_asset="$(python3 -c 'import json; print(json.load(open("/home/pi/balcony-log/build-manifest.json")).get("watchAssetVersion",""))')"
+  disk_asset="$("$check" field watchAssetVersion /home/pi/balcony-log/build-manifest.json)"
   live_asset="$(curl -fsS --max-time 2 http://127.0.0.1:3838/api/health \
-    | python3 -c 'import json,sys; print(json.load(sys.stdin).get("watchAssetVersion",""))' || true)"
+    | "$check" field watchAssetVersion || true)"
   if [[ -n "$disk_asset" && "$disk_asset" != "$live_asset" ]]; then
     echo "[info] static activate — watchAssetVersion stale in process; restarting balcony-log"
     sudo -n systemctl restart balcony-log
@@ -94,14 +84,13 @@ if [[ "${MODE}" == "static" ]]; then
       sleep 1
     done
     live_asset="$(curl -fsS --max-time 2 http://127.0.0.1:3838/api/health \
-      | python3 -c 'import json,sys; print(json.load(sys.stdin).get("watchAssetVersion",""))' || true)"
+      | "$check" field watchAssetVersion || true)"
     if [[ "$disk_asset" != "$live_asset" ]]; then
       echo "[fail] watchAssetVersion still stale after static restart (disk=${disk_asset} live=${live_asset})" >&2
       exit 1
     fi
   fi
   echo "[ok] static activate — files on disk${live_asset:+, watch stamp ${live_asset}}"
-  exit 0
 fi
 
 need_consecutive=3
@@ -109,25 +98,7 @@ consecutive_ok=0
 deadline=$((SECONDS + 180))
 while (( SECONDS < deadline )); do
   sample="$(curl -fsS --max-time 2 http://127.0.0.1:3838/api/live/status \
-    | python3 -c 'import json,sys
-try:
-  d=json.load(sys.stdin)
-  if d.get("ok") is not True:
-    raise ValueError("ok")
-  video=d.get("video") or {}
-  frags=int(video.get("fragmentsSent") or 0)
-  if frags <= 0:
-    raise ValueError("fragmentsSent")
-  fps=video.get("remuxFps")
-  if fps is None or float(fps) < 0.25:
-    raise ValueError("remuxFps")
-  age=video.get("lastChunkAgeMs")
-  if age is None or float(age) > 24000:
-    raise ValueError("lastChunkAgeMs")
-  print("ok")
-except Exception:
-  print("wait")
-' 2>/dev/null || echo wait)"
+    | "$check" stream 2>/dev/null || echo wait)"
   if [[ "$sample" == "ok" ]]; then
     consecutive_ok=$((consecutive_ok + 1))
     if [[ "$consecutive_ok" -ge "$need_consecutive" ]]; then
