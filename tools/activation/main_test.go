@@ -39,13 +39,16 @@ func TestStreamReadiness(t *testing.T) {
 }
 
 func TestStagingRequiresLiveIdentity(t *testing.T) {
-	health := `{"ok":true,"watchAssetVersion":"v2","issues":[],"stream":{"connected":true,"remuxInitReady":true}}`
+	health := `{"ok":true,"watchAssetVersion":"v2","issues":[],"stream":{"connected":true,"remuxInitReady":true,"frameAgeMs":100,"remuxFragmentFps":0.5}}`
 	manifest := `{"commitSha":"abc","watchAssetVersion":"v2"}`
 	if err := stagingReady(health, manifest, "abc", "v2"); err != nil {
 		t.Fatal(err)
 	}
 	for _, h := range []string{`{}`, strings.Replace(health, `v2`, `v1`, 1), strings.Replace(health, `true`, `false`, 1),
-		strings.Replace(health, `[]`, `["stale"]`, 1), strings.Replace(health, `"connected":true`, `"connected":false`, 1)} {
+		strings.Replace(health, `[]`, `["stale"]`, 1), strings.Replace(health, `"connected":true`, `"connected":false`, 1),
+		strings.Replace(health, `"frameAgeMs":100`, `"frameAgeMs":8001`, 1),
+		strings.Replace(health, `"frameAgeMs":100`, `"frameAgeMs":null`, 1),
+		strings.Replace(health, `"remuxFragmentFps":0.5`, `"remuxFragmentFps":0.1`, 1)} {
 		if err := stagingReady(h, manifest, "abc", "v2"); err == nil {
 			t.Fatalf("accepted unhealthy/stale %s", h)
 		}
