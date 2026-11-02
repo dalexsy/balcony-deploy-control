@@ -32,8 +32,10 @@ func stagingReady(healthJSON, manifestJSON, sha, asset string) error {
 		Asset  string   `json:"watchAssetVersion"`
 		Issues []string `json:"issues"`
 		Stream struct {
-			Connected bool `json:"connected"`
-			Ready     bool `json:"remuxInitReady"`
+			Connected bool     `json:"connected"`
+			Ready     bool     `json:"remuxInitReady"`
+			Age       *float64 `json:"frameAgeMs"`
+			FPS       *float64 `json:"remuxFragmentFps"`
 		} `json:"stream"`
 	}
 	var manifest struct {
@@ -51,6 +53,10 @@ func stagingReady(healthJSON, manifestJSON, sha, asset string) error {
 	}
 	if !health.OK || !health.Stream.Connected || !health.Stream.Ready || len(health.Issues) != 0 {
 		return errors.New("staging remux is unhealthy")
+	}
+	if health.Stream.Age == nil || *health.Stream.Age < 0 || *health.Stream.Age > 8_000 ||
+		health.Stream.FPS == nil || *health.Stream.FPS < .25 {
+		return errors.New("staging remux is not producing fresh fragments")
 	}
 	return nil
 }
