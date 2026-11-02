@@ -126,6 +126,7 @@ jobs:
           npm run test:watch-human-presence
           npm run test:watch-viewer-return
           npm run test:watch-frame-dedupe
+          npm run test:watch-weather-retry
           npm run lint:watch-static
 
       - name: Build Angular dist (watch static ships from git at this SHA)
