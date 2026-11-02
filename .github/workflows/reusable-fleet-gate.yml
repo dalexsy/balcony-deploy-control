@@ -2,6 +2,9 @@
 
 on:
   workflow_call:
+    secrets:
+      DIRECTORY_READ_KEY:
+        required: false
     inputs:
       app-name:
         description: Application folder / site id
@@ -75,9 +78,9 @@ jobs:
           if [[ -f commitlint.config.cjs || -f commitlint.config.js || -f .commitlintrc.json ]]; then
             CONFIG_ARGS=()
           else
-            printf '%s\n' 'module.exports = { extends: ["@commitlint/config-conventional"] };' \
-              > "$TOOLS/commitlint.config.cjs"
-            CONFIG_ARGS=(--config "$TOOLS/commitlint.config.cjs")
+            printf '%s\n' '{"extends":["@commitlint/config-conventional"]}' \
+              > "$TOOLS/.commitlintrc.json"
+            CONFIG_ARGS=(--config "$TOOLS/.commitlintrc.json")
           fi
           BASE="$(git merge-base HEAD origin/main 2>/dev/null || git rev-list --max-parents=0 HEAD)"
           NODE_PATH="$TOOLS/node_modules" "$TOOLS/node_modules/.bin/commitlint" \
@@ -99,48 +102,23 @@ jobs:
           ref: ${{ inputs.app-ref != '' && inputs.app-ref || github.sha }}
           persist-credentials: false
 
-      - name: Fail if any source file exceeds 200 lines
+      - name: Checkout canonical Go quality tools
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          repository: dalexsy/directory
+          ref: main
+          path: node_modules/fleet-tools
+          ssh-key: ${{ secrets.DIRECTORY_READ_KEY }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: node_modules/fleet-tools/tools/fleet-max-lines/go.mod
+          cache: false
+      - name: Enforce canonical source and directory budgets
         working-directory: ${{ inputs.app-path }}
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import os, sys
-          SKIP_DIRS = {
-              "node_modules", "dist", "build", ".git", ".angular", ".gradle",
-              "static", "coverage", "storybook-static",
-          }
-          EXTS = {".ts", ".html", ".scss", ".js", ".mjs", ".kt", ".go", ".py"}
-          root = os.getcwd()
-          file_hits = []
-          scan_roots = ["src", os.path.join("functions", "src"), os.path.join("app", "src", "main")]
-          for rel_root in scan_roots:
-            source_root = os.path.join(root, rel_root)
-            if not os.path.isdir(source_root):
-              continue
-            for dirpath, dirnames, filenames in os.walk(source_root):
-              dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
-              for name in filenames:
-                ext = os.path.splitext(name)[1].lower()
-                if ext not in EXTS or name.endswith(".min.js") or name == "dryl-ui.mjs":
-                  continue
-                if ".spec." in name or ".generated." in name:
-                  continue
-                path = os.path.join(dirpath, name)
-                with open(path, "r", encoding="utf-8", errors="ignore") as fh:
-                  lines = sum(1 for _ in fh)
-                rel = os.path.relpath(path, root).replace("\\", "/")
-                limit = 0 if ext in {".js", ".mjs"} else 200
-                if lines > limit:
-                  file_hits.append((rel, lines, limit))
-          failed = False
-          for rel, lines, limit in sorted(file_hits, key=lambda x: -x[1]):
-              label = "forbidden-script" if limit == 0 else "bloated-file"
-              print(f"{label}: {rel} ({lines} lines > {limit})", file=sys.stderr)
-              failed = True
-          if failed:
-              sys.exit(1)
-          print("scale-gate passed (file <=200; folder budgets live in lint:ui)")
-          PY
+          go run -C "$GITHUB_WORKSPACE/node_modules/fleet-tools/tools/fleet-max-lines" . "$PWD"
 
   staging-checklist:
     name: staging-airgap-${{ inputs.app-name }}

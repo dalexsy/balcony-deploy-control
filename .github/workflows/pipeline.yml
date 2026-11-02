@@ -25,9 +25,20 @@ jobs:
           grep -q 'fleetctl' scripts/post-activate-ship-verify.sh
           grep -q 'ship-verify balcony' scripts/post-activate-ship-verify.sh
 
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/activation/go.mod
+          cache: false
+      - name: Test activation evidence and fail-closed execution
+        run: |
+          set -euo pipefail
+          go test -C tools/activation ./... -count=1
+          bash -n scripts/activate-production.sh scripts/activate-staging.sh
+
   fleet-gate:
     needs: [activate-shipverify-structure]
     uses: ./.github/workflows/reusable-fleet-gate.yml
+    secrets: inherit
     with:
       app-name: balcony-deploy-control
       app-repo: dalexsy/balcony-deploy-control
