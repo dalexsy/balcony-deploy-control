@@ -110,7 +110,7 @@ jobs:
           path: node_modules/fleet-tools
           ssh-key: ${{ secrets.DIRECTORY_READ_KEY }}
           persist-credentials: false
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
           go-version-file: node_modules/fleet-tools/tools/fleet-max-lines/go.mod
           cache: false

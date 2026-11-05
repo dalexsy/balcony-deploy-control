@@ -25,7 +25,7 @@ jobs:
           grep -q 'fleetctl' scripts/post-activate-ship-verify.sh
           grep -q 'ship-verify balcony' scripts/post-activate-ship-verify.sh
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
           go-version-file: tools/activation/go.mod
           cache: false

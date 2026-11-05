@@ -11,6 +11,11 @@
       "version": "v6.5.0",
       "using": "node24"
     },
+    "actions/setup-go": {
+      "sha": "924ae3a1cded613372ab5595356fb5720e22ba16",
+      "version": "v6.5.0",
+      "using": "node24"
+    },
     "actions/upload-artifact": {
       "sha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
       "version": "v7.0.1",
