@@ -102,13 +102,16 @@ jobs:
           ref: ${{ inputs.app-ref != '' && inputs.app-ref || github.sha }}
           persist-credentials: false
 
-      - name: Checkout canonical Go quality tools
+      # This repo is public, so the checkout needs no per-repo secret. The private
+      # directory repo could not be cloned by callers that never passed DIRECTORY_READ_KEY.
+      - name: Checkout Go quality tools
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
-          repository: dalexsy/directory
-          ref: main
+          repository: dalexsy/balcony-deploy-control
+          # Other repos' callers always use main. This repo's own PR tests its own head.
+          ref: ${{ github.repository == 'dalexsy/balcony-deploy-control' && github.event.pull_request.head.sha || 'main' }}
           path: node_modules/fleet-tools
-          ssh-key: ${{ secrets.DIRECTORY_READ_KEY }}
+          sparse-checkout: tools/fleet-max-lines
           persist-credentials: false
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
         with:
