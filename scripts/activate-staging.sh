@@ -17,6 +17,14 @@ tar -C "$target" -xzf "$artifact"
 check="${target}/tools/activation-check"
 test -x "$check"
 test "$("$check" field commitSha "${target}/build-manifest.json")" = "$sha"
+
+# Cafe's H.264 TCP output has one reliable consumer. Keep the staging remux
+# alive only for this candidate gate; a persistent second pull tears production.
+cleanup_staging_camera_pull() {
+  sudo -n systemctl stop balcony-log || true
+}
+trap cleanup_staging_camera_pull EXIT
+
 # The process must load the candidate stamp, including a static candidate.
 sudo -n systemctl restart balcony-log
 
