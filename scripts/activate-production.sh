@@ -31,13 +31,17 @@ check=/home/pi/balcony-log/tools/activation-check
 test -x "$check"
 test "$("$check" field commitSha /home/pi/balcony-log/build-manifest.json)" = "$SHA"
 
-if [[ "${MODE}" != "static" ]]; then
-  sudo -n systemctl restart balcony-log
+WATCH_UNIT=balcony-watch
+if [[ "${MODE}" == "static" ]]; then
+  echo "[info] static activate — restarting ${WATCH_UNIT} to load watch assets"
+  sudo -n systemctl restart "${WATCH_UNIT}"
+elif [[ "${MODE}" == "restart" ]]; then
+  sudo -n systemctl restart "${WATCH_UNIT}"
 fi
 
 deadline=$((SECONDS + 45))
 while (( SECONDS < deadline )); do
-  active="$(systemctl is-active balcony-log 2>/dev/null || true)"
+  active="$(systemctl is-active "${WATCH_UNIT}" 2>/dev/null || true)"
   status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
     --max-time 2 http://127.0.0.1:3838/api/health || true)"
   if [[ "$active" == "active" && "$status" == "200" ]]; then
@@ -46,9 +50,9 @@ while (( SECONDS < deadline )); do
   sleep 1
 done
 if [[ "${active:-}" != "active" || "${status:-}" != "200" ]]; then
-  echo "[fail] balcony-log did not become ready after activation" >&2
-  systemctl status balcony-log --no-pager >&2 || true
-  journalctl -u balcony-log -n 50 --no-pager >&2 || true
+  echo "[fail] ${WATCH_UNIT} did not become ready after activation" >&2
+  systemctl status "${WATCH_UNIT}" --no-pager >&2 || true
+  journalctl -u "${WATCH_UNIT}" -n 50 --no-pager >&2 || true
   exit 1
 fi
 
@@ -59,11 +63,13 @@ if [[ "$manifest_sha" != "$SHA" ]]; then
   exit 1
 fi
 
-health_sha="$(curl -fsS --max-time 2 http://127.0.0.1:3838/api/health \
-  | "$check" field appBuildVersion || true)"
-if [[ -z "$health_sha" || "$health_sha" != "$SHA" ]]; then
-  echo "[fail] health appBuildVersion (${health_sha:-missing}) != activate SHA ${SHA}" >&2
-  exit 1
+if [[ "${MODE}" != "static" ]]; then
+  health_sha="$(curl -fsS --max-time 2 http://127.0.0.1:3838/api/health \
+    | "$check" field appBuildVersion || true)"
+  if [[ -z "$health_sha" || "$health_sha" != "$SHA" ]]; then
+    echo "[fail] health appBuildVersion (${health_sha:-missing}) != activate SHA ${SHA}" >&2
+    exit 1
+  fi
 fi
 
 if [[ "${MODE}" == "static" ]]; then
@@ -71,11 +77,11 @@ if [[ "${MODE}" == "static" ]]; then
   live_asset="$(curl -fsS --max-time 2 http://127.0.0.1:3838/api/health \
     | "$check" field watchAssetVersion || true)"
   if [[ -n "$disk_asset" && "$disk_asset" != "$live_asset" ]]; then
-    echo "[info] static activate — watchAssetVersion stale in process; restarting balcony-log"
-    sudo -n systemctl restart balcony-log
+    echo "[info] static activate — watchAssetVersion stale in process; restarting ${WATCH_UNIT}"
+    sudo -n systemctl restart "${WATCH_UNIT}"
     deadline=$((SECONDS + 45))
     while (( SECONDS < deadline )); do
-      active="$(systemctl is-active balcony-log 2>/dev/null || true)"
+      active="$(systemctl is-active "${WATCH_UNIT}" 2>/dev/null || true)"
       status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
         --max-time 2 http://127.0.0.1:3838/api/health || true)"
       if [[ "$active" == "active" && "$status" == "200" ]]; then
@@ -102,7 +108,7 @@ while (( SECONDS < deadline )); do
   if [[ "$sample" == "ok" ]]; then
     consecutive_ok=$((consecutive_ok + 1))
     if [[ "$consecutive_ok" -ge "$need_consecutive" ]]; then
-      echo "[ok] balcony-log active, healthy, remux producing (tier-C loopback gate — HLS fragments)"
+      echo "[ok] ${WATCH_UNIT} active, healthy, remux producing (tier-C loopback gate — HLS fragments)"
       exit 0
     fi
   else
@@ -111,9 +117,9 @@ while (( SECONDS < deadline )); do
   sleep 2
 done
 
-echo "[fail] balcony-log remux did not pass sustained tier-C loopback gate after activation" >&2
-systemctl status balcony-log --no-pager >&2 || true
-journalctl -u balcony-log -n 50 --no-pager >&2 || true
+echo "[fail] ${WATCH_UNIT} remux did not pass sustained tier-C loopback gate after activation" >&2
+systemctl status "${WATCH_UNIT}" --no-pager >&2 || true
+journalctl -u "${WATCH_UNIT}" -n 50 --no-pager >&2 || true
 exit 1
 REMOTE
 
