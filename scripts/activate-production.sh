@@ -56,10 +56,9 @@ if [[ "${active:-}" != "active" || "${status:-}" != "200" ]]; then
   exit 1
 fi
 
-manifest_sha="$(curl -fsS --max-time 2 http://127.0.0.1:3838/api/build-manifest \
-  | "$check" field commitSha || true)"
+manifest_sha="$("$check" field commitSha /home/pi/balcony-log/build-manifest.json)"
 if [[ "$manifest_sha" != "$SHA" ]]; then
-  echo "[fail] disk build-manifest commitSha != ${SHA}" >&2
+  echo "[fail] build-manifest commitSha (${manifest_sha:-missing}) != ${SHA}" >&2
   exit 1
 fi
 
